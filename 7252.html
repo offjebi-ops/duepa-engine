@@ -1,0 +1,2779 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>デュエパ盤面スタジオ</title>
+<style>
+:root{
+  --felt:#0d141c; --panel:#161f2a; --panel2:#1d2937; --line:#2b3a4c;
+  --ink:#e9eff6; --dim:#8fa2b5;
+  --gold:#f0c33c; --fire:#e0452f; --water:#2e7fe0; --nature:#3fae5a; --dark:#8e5fd0; --light:#e8d977;
+  font-size:15px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--felt); color:var(--ink);
+  font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+header{
+  display:flex; align-items:center; gap:10px; padding:8px 12px;
+  background:var(--panel); border-bottom:1px solid var(--line); flex:0 0 auto;
+}
+header h1{font-size:15px; letter-spacing:.12em; font-weight:800}
+header h1 b{color:var(--gold)}
+header .spacer{flex:1}
+button{
+  font:inherit; color:var(--ink); background:var(--panel2); border:1px solid var(--line);
+  border-radius:7px; padding:6px 11px; cursor:pointer; font-size:13px;
+}
+button:hover{border-color:var(--dim)}
+button.primary{background:#2a4a75; border-color:#3d669c}
+button.gold{background:#4d3d10; border-color:#8a6d1c; color:#ffe9a3}
+button.danger{background:#4d1d16; border-color:#7c3226; color:#ffc9be}
+button.small{padding:3px 8px; font-size:12px}
+button:disabled{opacity:.4; cursor:default}
+main{flex:1; display:flex; min-height:0}
+#stageWrap{flex:1; display:flex; flex-direction:column; min-width:0}
+#hintBar{
+  flex:0 0 auto; padding:6px 12px; font-size:13px; color:var(--gold);
+  background:#151c14; border-bottom:1px solid var(--line); min-height:30px;
+  display:flex; align-items:center; gap:10px;
+}
+#hintBar.idle{color:var(--dim); background:transparent}
+#canvasBox{flex:1; display:flex; align-items:center; justify-content:center; min-height:0; padding:8px; background:#080c11}
+canvas#stage{max-width:100%; max-height:100%; border-radius:6px; box-shadow:0 0 0 1px var(--line), 0 12px 40px rgba(0,0,0,.6); touch-action:manipulation}
+#transport{
+  flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:8px 12px;
+  background:var(--panel); border-top:1px solid var(--line); flex-wrap:wrap;
+}
+#transport .sep{width:1px; height:22px; background:var(--line)}
+#stepPos{font-variant-numeric:tabular-nums; color:var(--dim); font-size:13px}
+select,input[type=text],input[type=number]{
+  font:inherit; color:var(--ink); background:#0f1620; border:1px solid var(--line);
+  border-radius:6px; padding:5px 8px; font-size:13px;
+}
+input[type=range]{accent-color:var(--gold)}
+#panel{
+  flex:0 0 340px; display:flex; flex-direction:column; background:var(--panel);
+  border-left:1px solid var(--line); min-height:0;
+}
+#tabs{display:flex; flex:0 0 auto; border-bottom:1px solid var(--line)}
+#tabs button{
+  flex:1; border:none; border-radius:0; background:transparent; padding:9px 4px;
+  color:var(--dim); font-size:12.5px; border-bottom:2px solid transparent; letter-spacing:.05em;
+}
+#tabs button.on{color:var(--gold); border-bottom-color:var(--gold); background:#1a2431}
+.tabPage{flex:1; overflow-y:auto; padding:10px; display:none; min-height:0}
+.tabPage.on{display:block}
+.secTitle{font-size:11.5px; color:var(--dim); letter-spacing:.15em; margin:12px 0 6px; font-weight:700}
+.secTitle:first-child{margin-top:0}
+.opGrid{display:grid; grid-template-columns:repeat(3,1fr); gap:6px}
+.opGrid button{padding:9px 4px; font-size:13px; font-weight:600; border-radius:8px; position:relative}
+.opGrid button .k{display:block; font-size:10px; color:var(--dim); font-weight:400; margin-top:2px}
+.opGrid button.atk{border-color:#6e3128; background:#301712}
+.opGrid button.mv{border-color:#2a4a3a; background:#122019}
+.opGrid button.pt{border-color:#6d5a1e; background:#2a2410}
+.opGrid button.fx{border-color:#3d4f75; background:#141d2e}
+#playerTabs{display:flex; gap:6px; position:sticky; top:-10px; z-index:6; background:var(--panel); margin:-10px -10px 10px; padding:10px; border-bottom:1px solid var(--line)}
+#playerTabs button{flex:1; padding:8px 2px; font-weight:700}
+#playerTabs button.on{background:#3d3110; border-color:var(--gold); color:var(--gold)}
+.assetGrid{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:8px}
+.assetGrid .card{
+  aspect-ratio:63/88; border-radius:6px; overflow:hidden; border:1px solid var(--line);
+  cursor:pointer; position:relative; background:#0b1118;
+}
+.assetGrid .card img{width:100%; height:100%; object-fit:cover; display:block}
+.assetGrid .card:hover{border-color:var(--gold)}
+.pickGrid .card.sel{outline:3px solid var(--gold);outline-offset:-1px}
+.assetGrid .card .del{
+  position:absolute; top:2px; right:2px; width:18px; height:18px; border-radius:50%;
+  background:rgba(0,0,0,.7); border:none; color:#f88; font-size:11px; line-height:1; padding:0;
+}
+.fileBtn{display:block; width:100%; text-align:center; margin-top:6px}
+.seRow{display:flex; align-items:center; gap:6px; margin:5px 0; font-size:12.5px}
+.seRow .nm{flex:0 0 84px; color:var(--dim)}
+.seRow select{flex:1; min-width:0}
+.seRow button{flex:0 0 auto}
+#stepList{list-style:none}
+#stepList li{
+  display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:7px;
+  border:1px solid transparent; cursor:pointer; font-size:12.5px; margin-bottom:3px;
+}
+#stepList li:hover{background:var(--panel2)}
+#stepList li.cur{border-color:var(--gold); background:#241f0d}
+#stepList li .idx{flex:0 0 26px; color:var(--dim); font-variant-numeric:tabular-nums}
+#stepList li .lbl{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+#stepList li .pbadge{flex:0 0 auto; font-size:10.5px; padding:1px 6px; border-radius:9px; background:var(--panel2); color:var(--dim)}
+#stepList li button{flex:0 0 auto}
+.formRow{display:flex; align-items:center; gap:8px; margin:7px 0; font-size:13px}
+.formRow label{flex:0 0 110px; color:var(--dim); font-size:12.5px}
+.formRow input,.formRow select{flex:1; min-width:0}
+.note{font-size:11.5px; color:var(--dim); line-height:1.6; margin-top:6px}
+/* modal */
+.modal{
+  position:fixed; inset:0; background:rgba(4,8,12,.75); display:none;
+  align-items:center; justify-content:center; z-index:50; padding:16px;
+}
+.modal.on{display:flex}
+.modal .box{
+  background:var(--panel); border:1px solid var(--line); border-radius:12px;
+  width:min(560px,100%); max-height:88vh; display:flex; flex-direction:column; overflow:hidden;
+}
+.modal .box h3{padding:12px 14px; font-size:14px; border-bottom:1px solid var(--line); letter-spacing:.06em}
+.modal .body{padding:12px 14px; overflow-y:auto}
+.modal .foot{padding:10px 14px; border-top:1px solid var(--line); display:flex; gap:8px; justify-content:flex-end}
+.pickGrid{display:grid; grid-template-columns:repeat(5,1fr); gap:8px}
+.pickGrid .card{aspect-ratio:63/88; border-radius:6px; overflow:hidden; border:2px solid var(--line); cursor:pointer; background:#0b1118; position:relative}
+.pickGrid .card img{width:100%; height:100%; object-fit:cover}
+.pickGrid .card:hover,.pickGrid .card.sel{border-color:var(--gold)}
+.pickGrid .card .cap{position:absolute; left:0; right:0; bottom:0; font-size:9.5px; padding:2px 3px; background:rgba(0,0,0,.72); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.civRow{display:flex; gap:6px; margin:6px 0}
+.civRow button{flex:1; padding:6px 0; font-weight:700}
+.civRow button.on{outline:2px solid var(--gold)}
+#exportProg{width:100%; height:10px; background:#0b1118; border-radius:6px; overflow:hidden; margin-top:10px}
+#exportProg i{display:block; height:100%; width:0%; background:linear-gradient(90deg,var(--gold),#f5945c)}
+@media (max-width:900px){
+  main{flex-direction:column; overflow-y:auto}
+  #stageWrap{flex:0 0 auto}
+  #canvasBox{padding:4px}
+  canvas#stage{max-height:52vh}
+  #panel{flex:1 1 auto; border-left:none; border-top:1px solid var(--line)}
+  .opGrid{grid-template-columns:repeat(3,1fr)}
+  :root{font-size:14px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>デュエパ<b>盤面</b>スタジオ</h1>
+  <span class="spacer"></span>
+  <button id="btnSave" class="small">保存</button>
+  <button id="btnLoad" class="small">読込</button>
+  <button id="btnPng" class="small">PNG</button>
+  <button id="btnExport" class="gold small">▶ 動画書き出し</button>
+</header>
+<main>
+  <div id="stageWrap">
+    <div id="hintBar" class="idle">操作パネルからアクションを選択（対象が必要な操作は盤面をタップして指定）</div>
+    <div id="canvasBox"><canvas id="stage" width="1920" height="1080"></canvas></div>
+    <div id="transport">
+      <button id="btnFirst" class="small">⏮</button>
+      <button id="btnPlay" class="primary">▶ 通し再生</button>
+      <button id="btnStop" class="small" disabled>■ 停止</button>
+      <span class="sep"></span>
+      <button id="btnUndo" class="small">↩ 最後の手順を削除</button>
+      <span class="sep"></span>
+      <label style="font-size:12px;color:var(--dim)">速度</label>
+      <input type="range" id="speed" min="0.5" max="2" step="0.25" value="1" style="width:90px">
+      <span id="speedVal" style="font-size:12px;color:var(--dim)">1.0x</span>
+      <span class="spacer" style="flex:1"></span>
+      <span id="stepPos">0 / 0</span>
+    </div>
+  </div>
+  <div id="panel">
+    <div id="tabs">
+      <button data-tab="ops" class="on">操作</button>
+      <button data-tab="assets">カード</button>
+      <button data-tab="se">SE</button>
+      <button data-tab="steps">手順</button>
+      <button data-tab="conf">設定</button>
+    </div>
+
+    <div class="tabPage on" data-page="ops">
+      <div id="playerTabs"></div>
+      <div class="secTitle">ターン・基本</div>
+      <div class="opGrid">
+        <button data-op="turn">ターン開始<span class="k">アンタップ込</span></button>
+        <button data-op="draw">ドロー</button>
+        <button data-op="charge">マナチャージ</button>
+        <button data-op="summon">召喚</button>
+        <button data-op="spell">呪文</button>
+        <button data-op="spend">マナ支払い</button>
+      </div>
+      <div class="secTitle">バトル</div>
+      <div class="opGrid">
+        <button data-op="attack" class="atk">攻撃<span class="k">対象を選択</span></button>
+        <button data-op="break" class="atk">ブレイク<span class="k">盾を選択</span></button>
+        <button data-op="trigger" class="atk">S・トリガー<span class="k">盾を選択</span></button>
+        <button data-op="block" class="atk">ブロック<span class="k">対象を選択</span></button>
+        <button data-op="cremove" class="atk">クリーチャー除去<span class="k">破壊/バウンス他</span></button>
+        <button data-op="tapToggle" class="atk">タップ/戻す<span class="k">場orパネル=マナ</span></button>
+        <button data-op="swap" class="atk">入れ替える<span class="k">革命/Jチェンジ</span></button>
+        <button data-op="evolve" class="atk">進化<span class="k">対象を選択</span></button>
+        <button data-op="devolve" class="atk">退化<span class="k">対象を選択</span></button>
+        <button data-op="meteor" class="atk">メテオバーン<span class="k">進化下→墓地</span></button>
+        <button data-op="ability" class="atk">効果発動<span class="k">対象を選択</span></button>
+        <button data-op="target" class="atk">対象指定<span class="k">場/盾/本体</span></button>
+      </div>
+      <div class="secTitle">移動・除去</div>
+      <div class="opGrid">
+        <button data-op="revive" class="mv">蘇生<span class="k">墓地→場</span></button>
+        <button data-op="recover" class="mv">回収<span class="k">墓地→手札</span></button>
+        <button data-op="addshield" class="mv">盾追加<span class="k">山札→盾</span></button>
+        <button data-op="sremove" class="mv">シールド除去<span class="k">墓地/手札/マナ/山札</span></button>
+        <button data-op="discard" class="mv">墓地へ送る<span class="k">墓地トップ更新</span></button>
+      </div>
+      <div class="secTitle">マナゾーン</div>
+      <div class="opGrid">
+        <button data-op="msummon" class="mv">マナから召喚</button>
+        <button data-op="mremove" class="mv">マナ除去<span class="k">墓地/手札/山札</span></button>
+        <button data-op="mshow" class="mv">マナを表示</button>
+      </div>
+
+      <div class="secTitle">パートナー</div>
+      <div class="opGrid">
+        <button data-op="psummon" class="pt">パートナー召喚</button>
+        <button data-op="preturn" class="pt">P.ゾーンへ<span class="k">裏向きで戻す</span></button>
+        <button data-op="pfaceup" class="pt">表向きにする</button>
+      </div>
+      <div class="secTitle">演出・その他</div>
+      <div class="opGrid">
+        <button data-op="logo" class="fx">ロゴ表示</button>
+        <button data-op="cutin" class="fx">カットイン</button>
+        <button data-op="lose" class="fx">敗北・退場</button>
+        <button data-op="adjust" class="fx">数値調整</button>
+        <button data-op="setpartner" class="fx">P.カード設定</button>
+        <button data-op="wait" class="fx">間（ウェイト）</button>
+      </div>
+    </div>
+
+    <div class="tabPage" data-page="assets">
+      <div class="secTitle">カード画像ライブラリ</div>
+      <button class="fileBtn" id="btnAddCards">＋ 画像ファイルを追加（複数可）</button>
+      <input type="file" id="fileCards" accept="image/*" multiple hidden>
+      <button class="fileBtn" id="btnMakeCard">＋ 簡易カードを作成（画像なしでOK）</button>
+      <div class="assetGrid" id="assetGrid"></div>
+      <p class="note">画像はプロジェクト保存ファイルに含まれます。縦長（63:88）推奨。カード画像はそのまま1枚のカードとして表示されます（枠等の上描きなし）。</p>
+      <div class="secTitle">カード裏面画像（山札・シールド共通）</div>
+      <button class="fileBtn" id="btnBackImg">＋ 裏面画像を設定</button>
+      <input type="file" id="fileBackImg" accept="image/*" hidden>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+        <img id="backPreview" style="width:56px;height:78px;object-fit:cover;border-radius:4px;display:none">
+        <span id="backStat" class="note">（未設定：標準デザインの裏面）</span>
+        <button class="small" id="btnBackClear" style="display:none">解除</button>
+      </div>
+    </div>
+
+    <div class="tabPage" data-page="se">
+      <div class="secTitle">SEファイル</div>
+      <button class="fileBtn" id="btnAddSe">＋ 音声ファイルを追加（複数可）</button>
+      <input type="file" id="fileSe" accept="audio/*,video/webm,.wav,.mp3,.m4a,.aac,.ogg,.oga,.opus,.flac,.caf,.aif,.aiff,.wma,.mp4" multiple hidden>
+      <div id="seFiles" class="note"></div>
+      <div class="secTitle">操作ごとのSE割り当て</div>
+      <div id="seMap"></div>
+      <div class="secTitle">ロゴ・エフェクト画像（S・トリガー / ブロッカー等）</div>
+      <button class="fileBtn" id="btnAddLogo">＋ ロゴ画像を追加（複数可・透過PNG推奨）</button>
+      <input type="file" id="fileLogo" accept="image/*" multiple hidden>
+      <div class="assetGrid" id="logoGrid"></div>
+      <div class="secTitle">操作ごとのロゴ自動表示</div>
+      <div id="logoMapBox"></div>
+      <p class="note">割り当てた操作の再生時にロゴが中央にポップ表示されます。「ロゴ表示」操作で任意のタイミングでも出せます。</p>
+      <p class="note">通し再生・動画書き出し時に、各操作の開始タイミングで鳴ります。</p>
+    </div>
+
+    <div class="tabPage" data-page="steps">
+      <div class="secTitle">手順タイムライン（クリックでその時点へ）</div>
+      <p class="note">行タップ=その時点へシーク / 番号タップ=移動先を数字で指定 / ▶=そこから再生 / ↑↓=入れ替え。入れ替えで対象（クリーチャー等）が存在しない順序になった手順は自動的にスキップされます。</p>
+      <ol id="stepList"></ol>
+    </div>
+
+    <div class="tabPage" data-page="conf">
+      <div class="secTitle">プレイヤー設定</div>
+      <div id="playerConf"></div>
+      <div class="secTitle">ゲーム設定</div>
+      <div class="formRow"><label>プレイ人数</label>
+        <select id="confNum"><option value="4">4人</option><option value="3">3人</option><option value="2">2人（通常デュエマ）</option></select></div>
+      <div class="formRow"><label>初期シールド</label><input type="number" id="confShields" value="6" min="0" max="15"></div>
+      <div class="formRow"><label>初期手札</label><input type="number" id="confHand" value="6" min="0" max="20"></div>
+      <div class="formRow"><label>初期山札</label><input type="number" id="confDeck" value="53" min="0" max="60"></div>
+      <div class="formRow"><label>下部余白(px)</label><input type="number" id="confPad" value="120" min="0" max="600" step="10"></div>
+      <label style="display:flex;align-items:center;gap:6px;margin:8px 0;font-size:12px;color:var(--dim)">
+        <input type="checkbox" id="confManaRow"> マナゾーンを常時表示（シールドより手元側に配置）
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;margin:8px 0;font-size:12px;color:var(--dim)">
+        <input type="checkbox" id="confPartner" checked> パートナーゾーンを表示
+      </label>
+      <p class="note">下部余白：盤面下側を真っ黒に空け、動画化後のテロップ等の編集スペースにできます。</p>
+      <div class="formRow"><label>カットインの大きさ</label>
+        <input type="range" id="confCutin" min="40" max="100" step="1" style="flex:1"><span id="confCutinV" style="width:44px;text-align:right;font-size:12px;color:var(--dim)"></span></div>
+      <p class="note">下部余白を除いた表示領域の高さに対する比率。100%でぴったり収まる最大サイズです。</p>
+      <div class="secTitle">フォント</div>
+      <div class="formRow"><label>フォント名</label><input type="text" id="confFont" placeholder="例: Klee One / 空欄=標準"></div>
+      <div id="fontPreview" style="padding:8px 10px;border:1px solid #33414f;border-radius:6px;margin:6px 0;font-size:18px">プレビュー: デュエパ Aa123 攻撃！</div>
+      <p class="note">入力と同時に盤面へ反映されます。端末に無いフォント名や日本語グリフを持たないフォントでは見た目が変わりません。確実に反映するには下のフォントファイル読込を使ってください。</p>
+      <button class="fileBtn" id="btnFontFile">＋ フォントファイルを読込（ttf/otf/woff）</button>
+      <input type="file" id="fileFont" accept=".ttf,.otf,.woff,.woff2,font/*" hidden>
+      <span id="fontStat" class="note">（標準フォント）</span>
+      <div class="secTitle">背景画像</div>
+      <button class="fileBtn" id="btnBgImg">＋ 背景画像を設定</button>
+      <input type="file" id="fileBgImg" accept="image/*" hidden>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:6px">
+        <img id="bgPreview" style="width:88px;height:50px;object-fit:cover;border-radius:4px;display:none">
+        <span id="bgStat" class="note">（未設定：標準グラデーション背景）</span>
+        <button class="small" id="btnBgClear" style="display:none">解除</button>
+      </div>
+      <p class="note">各プレイマットは指定色・不透明度95%で描かれ、背景画像がうっすら透けます。</p>
+      <button id="btnApplyConf" class="primary" style="width:100%;margin-top:8px">初期状態に反映（手順は保持）</button>
+      <p class="note">デュエパーティー公式推奨ルール：60枚ハイランダー／パートナー1枚（P.ゾーン）／初期手札・シールド各6枚／先攻もドローあり。初期山札 = 60 −（手札6 + 盾6 + パートナー1）= 47 …数値は自由に変更できます。</p>
+    </div>
+  </div>
+</main>
+
+<!-- カード選択モーダル -->
+<div class="modal" id="mPick"><div class="box">
+  <h3 id="mPickTitle">カードを選択</h3>
+  <div class="body"><div class="pickGrid" id="mPickGrid"></div></div>
+  <div class="foot"><button id="mPickNone">画像なし（裏面/汎用）</button><button id="mPickCancel">キャンセル</button></div>
+</div></div>
+
+<!-- 簡易カード作成 -->
+<div class="modal" id="mMake"><div class="box">
+  <h3>簡易カードを作成</h3>
+  <div class="body">
+    <div class="formRow"><label>カード名</label><input type="text" id="mkName" placeholder="爆炎の竜騎士"></div>
+    <div class="formRow"><label>コスト</label><input type="number" id="mkCost" value="5" min="0" max="99"></div>
+    <div class="formRow"><label>パワー</label><input type="text" id="mkPower" value="6000" placeholder="6000 / 空欄=呪文"></div>
+    <div class="civRow" id="mkCiv">
+      <button data-c="fire" style="background:#5c1810">火</button>
+      <button data-c="water" style="background:#12325c">水</button>
+      <button data-c="nature" style="background:#14421f">自然</button>
+      <button data-c="light" style="background:#5c5210">光</button>
+      <button data-c="dark" style="background:#331b52">闇</button>
+    </div>
+  </div>
+  <div class="foot"><button id="mkCancel">キャンセル</button><button id="mkOk" class="primary">作成</button></div>
+</div></div>
+
+<!-- テキスト入力 -->
+<div class="modal" id="mText"><div class="box">
+  <h3 id="mTextTitle">テロップ</h3>
+  <div class="body">
+    <div class="formRow"><label id="mTextLabel">表示テキスト</label><input type="text" id="mTextInput"></div>
+    <div class="formRow" id="mTextRow2" style="display:none"><label id="mTextLabel2"></label><input type="number" id="mTextInput2" value="1"></div>
+  </div>
+  <div class="foot"><button id="mTextCancel">キャンセル</button><button id="mTextOk" class="primary">OK</button></div>
+</div></div>
+
+<!-- 数値調整 -->
+<div class="modal" id="mAdj"><div class="box">
+  <h3>数値調整（選択中プレイヤー）</h3>
+  <div class="body">
+    <div class="formRow"><label>山札</label><input type="number" id="adjDeck"></div>
+    <div class="formRow"><label>手札</label><input type="number" id="adjHand"></div>
+    <div class="formRow"><label>マナ（合計）</label><input type="number" id="adjMana"></div>
+    <div class="formRow"><label>マナ（タップ中）</label><input type="number" id="adjManaT"></div>
+    <p class="note">この操作は演出なしで即時に数値を変更する手順として記録されます。</p>
+  </div>
+  <div class="foot"><button id="adjCancel">キャンセル</button><button id="adjOk" class="primary">OK</button></div>
+</div></div>
+
+<!-- 書き出し -->
+<div class="modal" id="mExport"><div class="box">
+  <h3>動画書き出し（WebM）</h3>
+  <div class="body">
+    <div class="formRow"><label>解像度</label>
+      <select id="expRes"><option value="1920">1920×1080</option><option value="1280">1280×720</option></select></div>
+    <div class="formRow"><label>再生速度</label>
+      <select id="expSpeed"><option value="1">1.0x</option><option value="0.75">0.75x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option></select></div>
+    <div class="formRow"><label>画質(Mbps)</label>
+      <select id="expBr"><option value="12">12（標準・高画質）</option><option value="20">20（さらに高画質）</option><option value="30">30（最高・要空き容量）</option><option value="8">8（軽量）</option></select></div>
+    <div class="formRow"><label>手順の範囲</label>
+      <input type="number" id="expFrom" min="1" value="1" style="width:80px"><span style="color:var(--dim)">〜</span><input type="number" id="expTo" min="1" style="width:80px"></div>
+    <p class="note">範囲を分けて書き出しても盤面は手順から再現されるため、同じプロジェクトのまま分割書き出しできます（開始手順の直前までの盤面が初期状態になります）。</p>
+    <p class="note" id="expDiskNote">全手順をリアルタイム再生しながら録画します（SE込み）。書き出し中はタブを切り替えないでください。</p>
+    <div id="exportProg"><i></i></div>
+    <div class="note" id="exportStat"></div>
+  </div>
+  <div class="foot"><button id="expCancel">閉じる</button><button id="expShare" style="display:none">保存 / 共有</button><button id="expStart" class="gold">録画開始</button></div>
+</div></div>
+
+<input type="file" id="fileProject" accept="application/json" hidden>
+<script>
+/* ================= デュエパ盤面スタジオ ================= */
+const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+const CIVCOL={fire:'#e0452f',water:'#2e7fe0',nature:'#3fae5a',light:'#d8c94f',dark:'#8e5fd0'};
+const CIVNAME={fire:'火',water:'水',nature:'自然',light:'光',dark:'闇'};
+const CIVLIST=['fire','water','nature','light','dark'];
+const canvas=$('#stage'), ctx=canvas.getContext('2d');
+let FONTF='sans-serif';
+let customFontData=null; // {name,dataURL}
+function applyFont(name){
+  FONTF=name&&name.trim()?'"'+name.trim().replace(/"/g,'')+'", sans-serif':'sans-serif';
+  if(state)render(state);
+}
+function civsOf(pl){return Array.isArray(pl.civs)&&pl.civs.length?pl.civs:(pl.civ?[pl.civ]:['fire']);}
+function civMain(pl){return CIVCOL[civsOf(pl)[0]];}
+function civLabel(pl){return civsOf(pl).map(c=>CIVNAME[c]).join('/');}
+function civStroke(pl,x0,y0,x1,y1,alpha){
+  const cs=civsOf(pl);
+  if(cs.length===1)return CIVCOL[cs[0]]+(alpha||'');
+  const g=ctx.createLinearGradient(x0,y0,x1,y1);
+  cs.forEach((c,i)=>g.addColorStop(i/(cs.length-1),CIVCOL[c]+(alpha||'')));
+  return g;
+}
+
+/* ---------- data ---------- */
+let assets=[];            // {id,name,dataURL,img}
+let seList=[];            // {id,name,dataURL,buffer}
+let assetSeq=1, seSeq=1, uidSeq=1;
+const SE_SLOTS=[['summon','召喚'],['psummon','P召喚'],['spell','呪文'],['attack','攻撃'],['block','ブロック'],['destroy','破壊'],['break','ブレイク'],['trigger','Sトリガー'],['draw','ドロー'],['charge','チャージ'],['bounce','バウンス'],['cutin','カットイン'],['telop','テロップ'],['turn','ターン'],['lose','敗北'],['ability','効果発動'],['target','対象指定']];
+let seMap={}; SE_SLOTS.forEach(([k])=>seMap[k]=null);
+let logoList=[];           // {id,name,dataURL,img} ロゴ・エフェクト画像
+let logoSeq=1;
+let logoMap={}; SE_SLOTS.forEach(([k])=>logoMap[k]=null); // 操作→自動ロゴ表示
+let config={num:4,shields:6,hand:6,deck:47,bottomPad:120,cutinPct:92,
+  players:[
+    {name:'PLAYER 1',civs:['fire'],mat:'#3a1712'},
+    {name:'PLAYER 2',civs:['water'],mat:'#122c48'},
+    {name:'PLAYER 3',civs:['nature'],mat:'#143a20'},
+    {name:'PLAYER 4',civs:['dark'],mat:'#281743'}]};
+let backImg=null;          // {dataURL,img} 山札/シールド共通の裏面画像
+let bgImg=null;            // {dataURL,img} 盤面全体の背景画像
+let steps=[];
+let cursor=0;
+let state=null;
+let selPlayer=0;
+let mode=null;            // 対象選択モード
+let hitRects=[];
+let playing=false, stopFlag=false;
+let animateOnAdd=true;
+
+function cardName(c){ if(!c)return ''; if(c.name)return c.name; const a=assets.find(x=>x.id===c.a); return a?a.name:''; }
+function cardImg(c){ if(!c||c.a==null)return null; const a=assets.find(x=>x.id===c.a); return a?a.img:null; }
+
+/* ---------- state ---------- */
+function initState(){
+  const st={turnP:-1,turnNo:0,turnCounts:[0,0,0,0],players:[]};
+  for(let i=0;i<config.num;i++){
+    st.players.push({deck:config.deck,hand:config.hand,
+      mana:{total:0,tapped:0},manaZ:[],grave:[],battle:[],
+      shields:Array.from({length:config.shields},()=>({})),
+      partner:{card:null,status:'zone'},out:false});
+  }
+  return st;
+}
+function P(st,i){return st.players[i];}
+
+function applyStep(st,s){
+  const d=s.data||{}, p=d.p!=null?P(st,d.p):null;
+  switch(s.type){
+    case 'turn': st.turnP=d.p; st.turnNo++; st.turnCounts[d.p]=(st.turnCounts[d.p]||0)+1; p.mana.tapped=0; p.manaZ.forEach(c=>c.tapped=false); p.battle.forEach(c=>c.tapped=false); break;
+    case 'draw': p.deck=Math.max(0,p.deck-1); p.hand++; break;
+    case 'charge': { if(d.fromDeck)p.deck=Math.max(0,p.deck-1); else p.hand=Math.max(0,p.hand-1);
+      p.mana.total++;
+      p.manaZ.push({card:d.card||null,tapped:!!d.tapped});
+      if(d.tapped)p.mana.tapped=Math.min(p.mana.total,p.mana.tapped+1); } break;
+    case 'spend': {
+      if(d.mis&&d.mis.length){
+        d.mis.forEach(mi=>{const c=p.manaZ[mi];if(c)c.tapped=true;});
+        p.mana.tapped=Math.min(p.mana.total,p.manaZ.filter(c=>c.tapped).length);
+      }else{
+        p.mana.tapped=Math.min(p.mana.total,p.mana.tapped+d.n);
+        let left=d.n; p.manaZ.forEach(c=>{if(left>0&&!c.tapped){c.tapped=true;left--;}});
+      } } break;
+    case 'summon': p.hand=Math.max(0,p.hand-1); p.battle.push({uid:d.uid,card:d.card,tapped:!!d.tapped}); break;
+    case 'spell': p.hand=Math.max(0,p.hand-1); p.grave.push(d.card); break;
+    case 'attack': { const c=p.battle.find(b=>b.uid===d.uid); if(c)c.tapped=true; } break;
+    case 'block': { const c=p.battle.find(b=>b.uid===d.uid); if(c)c.tapped=true; } break;
+    case 'destroy': { const tp=P(st,d.tp), i=tp.battle.findIndex(b=>b.uid===d.uid);
+      if(i>=0){ const c=tp.battle.splice(i,1)[0]; tp.grave.push(c.card); if(c.partner)tp.partner.status='grave'; } } break;
+    case 'bounce': { const tp=P(st,d.tp), i=tp.battle.findIndex(b=>b.uid===d.uid);
+      if(i>=0){ const c=tp.battle.splice(i,1)[0]; tp.hand++; if(c.partner)tp.partner.status='hand'; } } break;
+    case 'tomana': { const tp=P(st,d.tp), i=tp.battle.findIndex(b=>b.uid===d.uid);
+      if(i>=0){ const c=tp.battle.splice(i,1)[0]; tp.mana.total++; tp.manaZ.push({card:c.card||null,tapped:false}); if(c.partner)tp.partner.status='mana'; } } break;
+    case 'toshield': { const tp=P(st,d.tp), i=tp.battle.findIndex(b=>b.uid===d.uid);
+      if(i>=0){ const c=tp.battle.splice(i,1)[0]; tp.shields.push({added:true,card:c.card}); if(c.partner)tp.partner.status='shield'; } } break;
+    case 'todeck': { const tp=P(st,d.tp), i=tp.battle.findIndex(b=>b.uid===d.uid);
+      if(i>=0){ const c=tp.battle.splice(i,1)[0]; tp.deck++; if(c.partner)tp.partner.status='deck'; } } break;
+    case 'exile': { const tp=P(st,d.tp), i=tp.battle.findIndex(b=>b.uid===d.uid);
+      if(i>=0){ const c=tp.battle.splice(i,1)[0]; if(c.partner)tp.partner.status='exile'; } } break;
+    case 'mtodeck': { p.manaZ.splice(d.mi,1);
+      p.mana.total=Math.max(0,p.mana.total-1); p.mana.tapped=Math.min(p.mana.tapped,p.mana.total);
+      p.deck++; } break;
+    case 'smana': { const tp=P(st,d.tp); if(tp.shields.length>d.idx){const sc=tp.shields.splice(d.idx,1)[0];
+      tp.mana.total++; tp.manaZ.push({card:sc.card||null,tapped:false});} } break;
+    case 'stodeck': { const tp=P(st,d.tp); if(tp.shields.length>d.idx){tp.shields.splice(d.idx,1); tp.deck++;} } break;
+    case 'tapToggle': { const tp=P(st,d.tp), c=tp.battle.find(b=>b.uid===d.uid); if(c)c.tapped=!c.tapped; } break;
+    case 'break': { const tp=P(st,d.tp); if(tp.shields.length>d.idx){tp.shields.splice(d.idx,1); tp.hand++;} } break;
+    case 'sbounce': { const tp=P(st,d.tp); if(tp.shields.length>d.idx){tp.shields.splice(d.idx,1); tp.hand++;} } break;
+    case 'trigger': { const tp=P(st,d.tp); if(tp.shields.length>d.idx){tp.shields.splice(d.idx,1); tp.hand++;} } break;
+    case 'shieldburn': { const tp=P(st,d.tp); if(tp.shields.length>d.idx){tp.shields.splice(d.idx,1); tp.grave.push(null);} } break;
+    case 'addshield': { if(d.fromHand)p.hand=Math.max(0,p.hand-1); else p.deck=Math.max(0,p.deck-1); p.shields.push({added:true,card:d.card||null}); } break;
+    case 'revive': { p.grave.splice(d.gi,1); p.battle.push({uid:d.uid,card:d.card,tapped:false}); } break;
+    case 'recover': { p.grave.splice(d.gi,1); p.hand++; } break;
+    case 'psummon': p.partner.status='battle'; p.battle.push({uid:d.uid,card:p.partner.card,tapped:!!d.tapped,partner:true}); break;
+    case 'preturn': {
+      const i=p.battle.findIndex(b=>b.partner); if(i>=0)p.battle.splice(i,1);
+      const gi=p.grave.length&&p.partner.status==='grave'?p.grave.lastIndexOf(p.partner.card):-1; if(gi>=0)p.grave.splice(gi,1);
+      p.partner.status='facedown';
+    } break;
+    case 'pfaceup': p.partner.status='zone'; break;
+    case 'setpartner': p.partner.card=d.card; if(p.partner.status!=='battle')p.partner.status='zone'; break;
+    case 'lose': p.out=true; break;
+    case 'adjust': { p.deck=d.deck; p.hand=d.hand; p.mana.total=d.mana; p.mana.tapped=Math.min(d.manaT,d.mana);
+      while(p.manaZ.length<d.mana)p.manaZ.push({card:null,tapped:false});
+      p.manaZ.length=d.mana;
+      p.manaZ.forEach((c,i)=>c.tapped=i<p.mana.tapped); } break;
+    case 'msummon': { const mc=p.manaZ.splice(d.mi,1)[0]||{card:d.card};
+      p.mana.total=Math.max(0,p.mana.total-1); p.mana.tapped=Math.min(p.mana.tapped,p.mana.total);
+      p.battle.push({uid:d.uid,card:d.card||mc.card,tapped:!!d.tapped}); } break;
+    case 'mdestroy': { const mc=p.manaZ.splice(d.mi,1)[0];
+      p.mana.total=Math.max(0,p.mana.total-1); p.mana.tapped=Math.min(p.mana.tapped,p.mana.total);
+      p.grave.push(mc?mc.card:null); } break;
+    case 'mbounce': { p.manaZ.splice(d.mi,1);
+      p.mana.total=Math.max(0,p.mana.total-1); p.mana.tapped=Math.min(p.mana.tapped,p.mana.total);
+      p.hand++; } break;
+    case 'swap': {
+      const pa=P(st,d.a.p), ia=pa.battle.findIndex(b=>b.uid===d.a.uid);
+      if(ia<0)break;
+      if(d.mode==='bb'){
+        const pb=P(st,d.b.p), ib=pb.battle.findIndex(b=>b.uid===d.b.uid);
+        if(ib<0)break;
+        const tmp=pa.battle[ia]; pa.battle[ia]=pb.battle[ib]; pb.battle[ib]=tmp;
+      }else if(d.mode==='bh'){
+        pa.battle[ia]={uid:d.newUid,card:d.card,tapped:pa.battle[ia].tapped};
+      }else if(d.mode==='bm'){
+        const mc=pa.manaZ[d.b.mi]; if(!mc)break;
+        const oldCard=pa.battle[ia].card;
+        pa.battle[ia]={uid:d.newUid,card:mc.card,tapped:pa.battle[ia].tapped};
+        mc.card=oldCard;
+      }
+    } break;
+    case 'evolve': { const tp=P(st,d.tp); const it=tp.battle.find(b=>b.uid===d.uid);
+      if(it){ it.under=it.under||[]; it.under.push(it.card); it.card=d.card; tp.hand=Math.max(0,tp.hand-1); } } break;
+    case 'devolve': { const tp=P(st,d.tp); const it=tp.battle.find(b=>b.uid===d.uid);
+      if(it&&it.under&&it.under.length){ tp.grave.push(it.card); it.card=it.under.pop(); } } break;
+    case 'discard': { p.grave.push(d.card||null); if(d.fromHand)p.hand=Math.max(0,p.hand-1); if(d.fromDeck)p.deck=Math.max(0,p.deck-1); } break;
+    case 'mtap': { const c=p.manaZ[d.mi]; if(c){c.tapped=!c.tapped; p.mana.tapped=Math.min(p.mana.total,p.manaZ.filter(x=>x.tapped).length);} } break;
+    case 'meteor': { const tp=P(st,d.tp); const it=tp.battle.find(b=>b.uid===d.uid);
+      if(it&&it.under&&it.under.length){ tp.grave.push(it.under.pop()); } } break;
+    case 'ability': case 'target': break;
+    case 'mshow': break;
+    case 'telop': case 'logo': case 'cutin': case 'wait': break;
+  }
+}
+function buildTo(n){
+  state=initState();
+  for(let i=0;i<n&&i<steps.length;i++)applyStep(state,steps[i]);
+  cursor=Math.min(n,steps.length);
+  updateStepUI(); render(state);
+}
+
+/* ---------- layout ---------- */
+const W=1920,H=1080;
+function computeLayout(st){
+  const padB=Math.max(0,config.bottomPad||0);
+  const uH=H-padB;
+  const m=10, gap=12;
+  const L={players:[],uH,padB};
+  if(config.num===2){
+    // 2人: 上下2分割（P1=上/手元は上側、P2=下/手元は下側）
+    const cw=W-m*2, ch=(uH-m*2-gap)/2;
+    const pos=[{x:m,y:m,flip:true},{x:m,y:m+ch+gap,flip:false}];
+    for(let i=0;i<2;i++){
+      const q=pos[i];
+      L.players.push(panelLayout(st,i,{x:q.x,y:q.y,w:cw,h:ch,flip:q.flip}));
+    }
+    return L;
+  }
+  const cw=(W-m*2-gap)/2, ch=(uH-m*2-gap)/2;
+  // P1→P2↓ / ↑P4←P3 : P1左上 P2右上 P3右下 P4左下、上段は手元=上側(flip)
+  const pos=[
+    {x:m,        y:m,        flip:true },
+    {x:m+cw+gap, y:m,        flip:true },
+    {x:m+cw+gap, y:m+ch+gap, flip:false},
+    {x:m,        y:m+ch+gap, flip:false}];
+  for(let i=0;i<config.num;i++){
+    const q=pos[i];
+    L.players.push(panelLayout(st,i,{x:q.x,y:q.y,w:cw,h:ch,flip:q.flip}));
+  }
+  return L;
+}
+function panelLayout(st,i,r){
+  const p=P(st,i), flip=r.flip;
+  const left=config.num===2?true:(i===0||i===3); // 左列=P1,P4 / 右列=P2,P3（2人時は両者右端）
+  const pad=14;
+  const g={rect:r,flip,big:true};
+  const headH=36;
+  const stripH=124;
+  // ヘッダー: 上段(P1,P2)=パネル上端 / 下段(P3,P4)=パネル下端
+  g.head={x:r.x+pad,y:flip?r.y+4:r.y+r.h-headH-6,w:r.w-pad*2,h:headH};
+  // 常時マナ行（シールドより手元側）
+  const manaRowH=config.manaRow?92:0;
+  const manaGap=config.manaRow?6:0;
+  // 手元ストリップ: flip=ヘッダー(+マナ行)直下 / 非flip=ヘッダー(+マナ行)の上
+  const stripY=flip?r.y+headH+8+manaRowH+manaGap:r.y+r.h-headH-stripH-12-manaRowH-manaGap;
+  if(config.manaRow){
+    const mrY=flip?r.y+headH+6:r.y+r.h-headH-manaRowH-8;
+    g.manaRow={x:r.x+pad,y:mrY,w:r.w-pad*2,h:manaRowH};
+    const n=p.manaZ?p.manaZ.length:0;
+    g.manaSlots=[];
+    if(n>0){
+      const mgap=6, mh=manaRowH-14;
+      let mw=Math.min(mh*63/88,(g.manaRow.w-(n-1)*mgap)/n);
+      mw=Math.max(24,mw);
+      const rowW=n*mw+(n-1)*mgap;
+      const sx0=flip?g.manaRow.x:g.manaRow.x+g.manaRow.w-rowW; // flip=左詰め / 非flip=右詰め
+      for(let k=0;k<n;k++)g.manaSlots.push({x:sx0+k*(mw+mgap),y:mrY+7,w:mw,h:mh});
+    }
+  }
+  const cardH=stripH-30, cardW=cardH*63/88;
+  const innerLabel=flip; // ラベル/枚数を内側(バトルゾーン側)に出す
+  const cardY=stripY+(innerLabel?4:24);
+  // ゾーン並び: 上段(P1,P2)=墓地→山札→シールド / 下段(P3,P4)=シールド→山札→墓地
+  const shN=p.shields.length, shGap=8, shH=cardH*0.96;
+  const shAvail=(r.w-pad*2)-(cardW+16)*2-24;
+  const shW=Math.max(28,Math.min(shH*63/88, shN>0?(shAvail-shGap*(shN-1))/shN:shH*63/88));
+  g.shields=[];
+  // 2人モード: セット全体(墓地+山札+シールド)をパネル中央に寄せるためのオフセット
+  const shRowW=shN>0?shN*shW+(shN-1)*shGap:0;
+  const setW=cardW*2+16+24+shRowW;
+  const center2=config.num===2?Math.max(0,(r.w-pad*2-setW)/2):0;
+  if(flip){
+    // P1,P2: 墓地→山札(左端/2人時は中央寄せ)、シールドはその右
+    let sx=r.x+pad+center2;
+    g.grave={x:sx,y:cardY,w:cardW,h:cardH}; sx+=cardW+16;
+    g.deck={x:sx,y:cardY,w:cardW,h:cardH}; sx+=cardW+24;
+    for(let k=0;k<shN;k++) g.shields.push({x:sx+k*(shW+shGap),y:cardY+(cardH-shH)/2,w:shW,h:shH});
+    g.shieldRow={x:sx,y:cardY,h:shH};
+  }else{
+    // P3,P4: 山札→墓地を右端に固定(2人時は中央寄せ)、シールドは山札のすぐ左に右詰め
+    g.grave={x:r.x+r.w-pad-cardW-center2,y:cardY,w:cardW,h:cardH};
+    g.deck={x:g.grave.x-16-cardW,y:cardY,w:cardW,h:cardH};
+    const sx=g.deck.x-24-shRowW;
+    for(let k=0;k<shN;k++) g.shields.push({x:sx+k*(shW+shGap),y:cardY+(cardH-shH)/2,w:shW,h:shH});
+    g.shieldRow={x:sx,y:cardY,h:shH};
+  }
+  // バトルゾーン: 中央側
+  const bzY=flip?stripY+stripH+4:r.y+8;
+  const bzH=r.h-headH-stripH-26-(config.manaRow?98:0);
+  g.bz={x:r.x+pad,y:bzY,w:r.w-pad*2,h:bzH};
+  // パートナーゾーン: 4分割の中心点に4人分が集まる位置
+  //   左列(P1,P4)=バトルゾーン右端 / 右列(P2,P3)=バトルゾーン左端
+  //   上段(flip)=バトルゾーン下端 / 下段=バトルゾーン上端
+  const pw=config.showPartner===false?0:cardW*1.05, ph=cardH*1.05;
+  g.partner={
+    x:left?g.bz.x+g.bz.w-pw-10:g.bz.x+10,
+    y:flip?g.bz.y+g.bz.h-ph-10:g.bz.y+10,
+    w:pw,h:ph};
+  // バトルゾーンのカード配置域（パートナー枠と混ざらないよう避ける）
+  const bx0=left?g.bz.x+8:g.bz.x+(pw?pw+30:8);
+  const bAvail=g.bz.w-(pw?pw+40:16);
+  const n=p.battle.length, cw0=Math.min(150,(bzH-14)*63/88);
+  const cg=10;
+  let cw=cw0;
+  if(n>0){ const need=n*cw0+(n-1)*cg; if(need>bAvail) cw=Math.max(44,(bAvail-(n-1)*cg)/n); }
+  g.battle=[];
+  const chn=Math.min(cw*88/63,bzH-8);
+  for(let k=0;k<n;k++) g.battle.push({uid:p.battle[k].uid,x:bx0+k*(cw+cg),y:bzY+Math.max(4,(bzH-chn)/2),w:cw,h:chn});
+  // 手札/マナ chip・ドロー先(画面外の上下=手元方向)
+  g.chips={x:r.x+r.w-pad,y:r.y+8};
+  g.handPos={x:g.deck.x+g.deck.w+30,y:flip?r.y-cardH-60:r.y+r.h+60};
+  g.manaPos={x:r.x+r.w-pad-170,y:g.head.y+headH-10};
+  return g;
+}
+
+/* ---------- drawing ---------- */
+function rr(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);}
+function drawCard(x,y,w,h,o){
+  o=o||{};
+  ctx.save();
+  ctx.translate(x+w/2,y+h/2);
+  if(o.upside)ctx.rotate(Math.PI);
+  if(o.tapped)ctx.rotate(o.tapRot!=null?o.tapRot:Math.PI/2);
+  if(o.scale)ctx.scale(o.scale,o.scale);
+  if(o.alpha!=null)ctx.globalAlpha=ctx.globalAlpha*o.alpha; // 外側のフェードを継承（乗算）
+  const hw=w/2,hh=h/2, rad=w*0.055;
+  // 自然な影（glow指定時はglow優先）
+  if(o.glow){ctx.shadowColor=o.glow;ctx.shadowBlur=Math.max(14,w*0.22);}
+  else{ctx.shadowColor='rgba(0,0,0,.55)';ctx.shadowBlur=Math.max(6,w*0.10);ctx.shadowOffsetY=Math.max(2,h*0.035);}
+  rr(-hw,-hh,w,h,rad);
+  if(o.faceDown){
+    if(backImg&&backImg.img){
+      ctx.fillStyle='#0a0f16';ctx.fill();
+      ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+      ctx.save();rr(-hw,-hh,w,h,rad);ctx.clip();ctx.drawImage(backImg.img,-hw,-hh,w,h);ctx.restore();
+    }else{
+      const gd=ctx.createLinearGradient(-hw,-hh,hw,hh);
+      gd.addColorStop(0,'#1c2f66');gd.addColorStop(1,'#0d1836');
+      ctx.fillStyle=gd;ctx.fill();
+      ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+      ctx.strokeStyle='#4a63b0';ctx.lineWidth=Math.max(1.5,w*0.03);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(0,-hh*0.42);ctx.lineTo(hw*0.42,0);ctx.lineTo(0,hh*0.42);ctx.lineTo(-hw*0.42,0);ctx.closePath();
+      ctx.strokeStyle='#7e95d8';ctx.lineWidth=Math.max(1.2,w*0.025);ctx.stroke();
+      ctx.beginPath();ctx.arc(0,0,w*0.12,0,7);ctx.fillStyle='#33518f';ctx.fill();
+    }
+  }else{
+    const img=cardImg(o.card);
+    if(img){
+      // 画像がある場合は「カード画像全体」がそのまま1枚のカード＝枠等は上描きしない
+      ctx.fillStyle='#0a0f16';ctx.fill();
+      ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+      ctx.save();rr(-hw,-hh,w,h,rad);ctx.clip();ctx.drawImage(img,-hw,-hh,w,h);ctx.restore();
+    }else{
+      ctx.fillStyle='#232d3b';ctx.fill();ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+      ctx.strokeStyle='#4a5a70';ctx.lineWidth=Math.max(1.2,w*0.025);ctx.stroke();
+      ctx.fillStyle='#7d90a8';ctx.font=`700 ${Math.max(11,w*0.16)}px ${FONTF}`;ctx.textAlign='center';ctx.textBaseline='middle';
+      const nm=cardName(o.card)||'CARD';
+      wrapText(nm,0,0,w*0.86,Math.max(12,w*0.18));
+    }
+
+  }
+  ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+  ctx.restore();
+}
+function wrapText(t,x,y,maxW,lh){
+  const lines=[];let cur='';
+  for(const ch of t){ if(ctx.measureText(cur+ch).width>maxW){lines.push(cur);cur=ch;} else cur+=ch; }
+  if(cur)lines.push(cur);
+  const y0=y-(lines.length-1)*lh/2;
+  lines.slice(0,4).forEach((l,i)=>ctx.fillText(l,x,y0+i*lh));
+}
+function chip(x,y,label,val,right,color){
+  ctx.font='700 21px '+FONTF;
+  const t=`${label} ${val}`;
+  const w=ctx.measureText(t).width+22;
+  const xx=right?x-w:x;
+  rr(xx,y,w,30,15);ctx.fillStyle='rgba(0,0,0,.45)';ctx.fill();
+  ctx.strokeStyle=color||'#3a4b60';ctx.lineWidth=1.4;ctx.stroke();
+  ctx.fillStyle=color||'#cfe0f2';ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText(t,xx+11,y+16);
+  return w;
+}
+function render(st,opts){
+  opts=opts||{};
+  hitRects=[];
+  // 背景: 画像があればカバー配置、なければグラデーション
+  if(bgImg&&bgImg.img){
+    const img=bgImg.img, s=Math.max(W/img.width,H/img.height);
+    const dw=img.width*s, dh=img.height*s;
+    ctx.drawImage(img,(W-dw)/2,(H-dh)/2,dw,dh);
+  }else{
+    const bg=ctx.createRadialGradient(W/2,H/2,100,W/2,H/2,1200);
+    bg.addColorStop(0,'#13202e');bg.addColorStop(1,'#070b10');
+    ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(255,255,255,.03)';ctx.lineWidth=1;
+    for(let x=0;x<W;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  }
+  const L=computeLayout(st);
+  for(let i=0;i<config.num;i++)drawPanel(st,i,L.players[i],opts);
+  // 下部黒帯（動画編集用の余白）
+  if(L.padB>0){ctx.fillStyle='#000';ctx.fillRect(0,H-L.padB,W,L.padB);}
+  return L;
+}
+function drawPanel(st,i,g,opts){
+  const p=P(st,i), r=g.rect, pl=config.players[i], flip=g.flip;
+  // プレイマット: 指定色を不透明度95%で（背景画像が透ける）
+  rr(r.x,r.y,r.w,r.h,14);
+  ctx.save();ctx.globalAlpha=pl.matA!=null?pl.matA:0.95;
+  ctx.fillStyle=pl.mat||'#16222e';ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle=st.turnP===i?'#f0c33c':civStroke(pl,r.x,r.y,r.x+r.w,r.y,'66');
+  ctx.lineWidth=st.turnP===i?4:2;
+  rr(r.x,r.y,r.w,r.h,14);ctx.stroke();
+  hitRects.push({kind:'panel',p:i,rect:{x:r.x,y:r.y,w:r.w,h:r.h}});
+  // 敗北済み: 暗転して空の盤面
+  if(p.out){
+    rr(r.x,r.y,r.w,r.h,14);ctx.fillStyle='rgba(4,6,9,.9)';ctx.fill();
+    ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.font='800 28px '+FONTF;
+    ctx.fillStyle='rgba(255,255,255,.16)';
+    ctx.fillText(pl.name,g.head.x,g.head.y+g.head.h/2);
+    return;
+  }
+  // 名前
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.font='800 28px '+FONTF;
+  const nmW=ctx.measureText(pl.name).width;
+  ctx.fillStyle=civStroke(pl,g.head.x,0,g.head.x+Math.max(nmW,80),0);
+  ctx.fillText(pl.name,g.head.x,g.head.y+g.head.h/2);
+  // chips 右上
+  let cx=r.x+r.w-14;
+  cx-=chip(cx,g.head.y+5,'手札',p.hand,true)+8;
+  cx-=chip(cx,g.head.y+5,'マナ',`${p.mana.total-p.mana.tapped}/${p.mana.total}`,true,'#8fd8a0')+8;
+  // ゾーンラベル: 内側(バトルゾーン側)に表示
+  // 山札
+  drawCard(g.deck.x,g.deck.y,g.deck.w,g.deck.h,{faceDown:true,upside:flip});
+  ctx.fillStyle='#dfe9f5';ctx.font='800 19px '+FONTF;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(p.deck,g.deck.x+g.deck.w/2,flip?g.deck.y+g.deck.h+14:g.deck.y-13);
+  // 墓地
+  const topG=p.grave.length?p.grave[p.grave.length-1]:null;
+  if(p.grave.length)drawCard(g.grave.x,g.grave.y,g.grave.w,g.grave.h,{card:topG,alpha:.9,upside:flip});
+  else{rr(g.grave.x,g.grave.y,g.grave.w,g.grave.h,6);ctx.strokeStyle='#33414f';ctx.setLineDash([5,4]);ctx.lineWidth=1.5;ctx.stroke();ctx.setLineDash([]);}
+  ctx.fillStyle='#dfe9f5';ctx.font='800 19px '+FONTF;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(p.grave.length,g.grave.x+g.grave.w/2,flip?g.grave.y+g.grave.h+14:g.grave.y-13);
+  // パートナーゾーン（バトルゾーンと区別する緑枠）
+  const pt=g.partner, ps=p.partner;
+  if(config.showPartner===false){/* 非表示設定 */}
+  else{
+  rr(pt.x-5,pt.y-5,pt.w+10,pt.h+10,8);
+  ctx.strokeStyle='#3fae5a';ctx.lineWidth=2.5;ctx.stroke();
+  ctx.fillStyle='rgba(63,174,90,.10)';rr(pt.x-5,pt.y-5,pt.w+10,pt.h+10,8);ctx.fill();
+  const hideP=opts.hide&&opts.hide.partner===i;
+  if(!hideP){
+    if(ps.status==='zone')drawCard(pt.x,pt.y,pt.w,pt.h,{card:ps.card,partner:true,upside:flip});
+    else if(ps.status==='facedown')drawCard(pt.x,pt.y,pt.w,pt.h,{faceDown:true,alpha:.85,upside:flip});
+  }
+  hitRects.push({kind:'partner',p:i,rect:{x:pt.x,y:pt.y,w:pt.w,h:pt.h}});
+  }
+  // シールド
+  // 常時マナ行
+  if(config.manaRow&&g.manaRow){
+    rr(g.manaRow.x,g.manaRow.y,g.manaRow.w,g.manaRow.h,8);
+    ctx.fillStyle='rgba(63,174,90,.07)';ctx.fill();
+    ctx.strokeStyle='rgba(63,174,90,.45)';ctx.lineWidth=1.5;ctx.stroke();
+    const upM=!flip;
+    (p.manaZ||[]).forEach((c,k)=>{
+      if(opts.hide&&opts.hide.mana&&opts.hide.mana.p===i&&opts.hide.mana.mi===k)return;
+      const sl=g.manaSlots[k];if(!sl)return;
+      drawCard(sl.x,sl.y,sl.w,sl.h,{card:c.card,tapped:c.tapped,upside:upM,tapRot:-Math.PI/2});
+      hitRects.push({kind:'mana',p:i,mi:k,rect:sl});
+    });
+  }
+  g.shields.forEach((sr,k)=>{
+    if(opts.hide&&opts.hide.shield&&opts.hide.shield.p===i&&opts.hide.shield.idx===k)return;
+    if(opts.hide&&opts.hide.shields&&opts.hide.shields.some(sd=>sd.p===i&&sd.idx===k))return;
+    const sc=p.shields[k]||{};
+    if(sc.added){
+      // 追加シールド: 金色の柔らかいグロー+枠+薄い金フィルター
+      drawCard(sr.x,sr.y,sr.w,sr.h,{faceDown:true,upside:flip,glow:'#f0c33c'});
+      ctx.save();
+      rr(sr.x,sr.y,sr.w,sr.h,sr.w*0.055);
+      ctx.fillStyle='rgba(240,195,60,.16)';ctx.fill();
+      ctx.strokeStyle='rgba(240,195,60,.85)';ctx.lineWidth=2;ctx.stroke();
+      ctx.restore();
+    }else{
+      drawCard(sr.x,sr.y,sr.w,sr.h,{faceDown:true,upside:flip});
+    }
+    hitRects.push({kind:'shield',p:i,idx:k,rect:sr});
+  });
+  // バトルゾーン
+  ctx.fillStyle='rgba(255,255,255,.05)';
+  rr(g.bz.x,g.bz.y,g.bz.w,g.bz.h,10);ctx.fill();
+  p.battle.forEach((c,k)=>{
+    const cr=g.battle[k];
+    if(opts.hide&&(opts.hide.uid===c.uid||(opts.hide.uids&&opts.hide.uids.includes(c.uid))))return;
+    // 進化元スタック（下のカードを少しずらして表示）
+    if(c.under&&c.under.length){
+      const nU=Math.min(2,c.under.length);
+      for(let u=nU;u>=1;u--){
+        const off=u*9;
+        const uc=c.under[c.under.length-u];
+        // カード名のある辺(未タップ=上側/タップ=名前側の側面)が見えるようにずらす
+        const dx=c.tapped?(flip?-off:off):0;
+        const dy=c.tapped?0:(flip?off:-off);
+        drawCard(cr.x+dx,cr.y+dy,cr.w,cr.h,{card:uc,alpha:.85,upside:flip,tapped:c.tapped});
+      }
+    }
+    drawCard(cr.x,cr.y,cr.w,cr.h,{card:c.card,tapped:c.tapped,upside:flip});
+    hitRects.push({kind:'creature',p:i,uid:c.uid,rect:cr});
+  });
+}
+
+/* ---------- アニメーション ---------- */
+const EASE=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+const DUR={turn:1.3,draw:0.6,charge:0.7,spend:0.4,summon:1.0,spell:1.1,attack:1.1,block:0.9,destroy:1.0,
+  bounce:0.8,tomana:0.8,toshield:0.8,tapToggle:0.35,break:1.2,trigger:1.6,shieldburn:1.6,addshield:0.7,
+  revive:1.0,recover:0.8,psummon:1.3,preturn:1.0,pfaceup:0.5,setpartner:0.5,lose:1.6,adjust:0.15,
+  telop:0.2,logo:1.8,cutin:2.2,wait:1.0,msummon:1.6,mdestroy:1.3,mbounce:1.2,mshow:1.7,swap:1.3,mtap:1.2,ability:1.4,target:1.4,meteor:1.3,sbounce:1.0,evolve:1.4,devolve:1.3,discard:0.8,todeck:0.9,exile:1.1,mtodeck:1.4,smana:1.0,stodeck:0.9};
+Object.keys(DUR).forEach(k=>{if(k!=='wait')DUR[k]=Math.round(DUR[k]*1.3*100)/100;});
+function ctr(r){return {x:r.x+r.w/2,y:r.y+r.h/2};}
+function lerp(a,b,t){return a+(b-a)*t;}
+function starburst(x,y,rad,color,alpha){
+  ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=color;ctx.lineWidth=5;
+  for(let i=0;i<10;i++){const a=i/10*Math.PI*2+0.3;
+    ctx.beginPath();ctx.moveTo(x+Math.cos(a)*rad*0.35,y+Math.sin(a)*rad*0.35);
+    ctx.lineTo(x+Math.cos(a)*rad,y+Math.sin(a)*rad);ctx.stroke();}
+  ctx.restore();
+}
+function bigText(text,t,color){
+  const a=t<0.15?t/0.15:(t>0.85?(1-t)/0.15:1);
+  const sc=t<0.15?lerp(1.6,1,t/0.15):1;
+  ctx.save();ctx.globalAlpha=a;
+  ctx.translate(W/2,522);ctx.scale(sc,sc);
+  ctx.font='900 78px '+FONTF;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.shadowColor=color||'#f0c33c';ctx.shadowBlur=30;
+  ctx.fillStyle='#fff';ctx.fillText(text,0,0);
+  ctx.shadowBlur=0;ctx.strokeStyle=color||'#f0c33c';ctx.lineWidth=2;ctx.strokeText(text,0,0);
+  ctx.restore();
+}
+function shardSource(card,w,h){
+  const cv=document.createElement('canvas');
+  cv.width=Math.max(4,Math.round(w));cv.height=Math.max(4,Math.round(h));
+  const c=cv.getContext('2d');
+  const img=cardImg(card);
+  if(img){c.drawImage(img,0,0,cv.width,cv.height);}
+  else{
+    c.fillStyle='#232d3b';c.fillRect(0,0,cv.width,cv.height);
+    c.strokeStyle='#4a5a70';c.lineWidth=3;c.strokeRect(2,2,cv.width-4,cv.height-4);
+    c.fillStyle='#7d90a8';c.font='700 '+Math.max(12,cv.width*0.14)+'px '+FONTF;
+    c.textAlign='center';c.textBaseline='middle';
+    c.fillText((cardName(card)||'CARD').slice(0,7),cv.width/2,cv.height/2);
+  }
+  return cv;
+}
+function shardSourceBack(w,h){
+  const cv=document.createElement('canvas');
+  cv.width=Math.max(4,Math.round(w));cv.height=Math.max(4,Math.round(h));
+  const c=cv.getContext('2d');
+  if(backImg&&backImg.img){c.drawImage(backImg.img,0,0,cv.width,cv.height);}
+  else{
+    const gd=c.createLinearGradient(0,0,cv.width,cv.height);
+    gd.addColorStop(0,'#1c2f66');gd.addColorStop(1,'#0d1836');
+    c.fillStyle=gd;c.fillRect(0,0,cv.width,cv.height);
+    c.strokeStyle='#4a63b0';c.lineWidth=4;c.strokeRect(2,2,cv.width-4,cv.height-4);
+    c.strokeStyle='#7e95d8';c.lineWidth=3;
+    c.beginPath();c.moveTo(cv.width/2,cv.height*0.29);c.lineTo(cv.width*0.71,cv.height/2);
+    c.lineTo(cv.width/2,cv.height*0.71);c.lineTo(cv.width*0.29,cv.height/2);c.closePath();c.stroke();
+  }
+  return cv;
+}
+function makeShards(seed){
+  const cols=4,rows=5,sh=[];
+  let sd=(seed||7)%2147483646+1;
+  const rnd=()=>{sd=(sd*16807)%2147483647;return sd/2147483647;};
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const ang=Math.atan2(r-(rows-1)/2,c-(cols-1)/2)+(rnd()-0.5)*0.9;
+    const sp=70+rnd()*180;
+    sh.push({c,r,vx:Math.cos(ang)*sp,vy:Math.sin(ang)*sp-50*rnd(),vr:(rnd()-0.5)*8});
+  }
+  return {cols,rows,sh};
+}
+function shatterDraw(cv,SG,src,k,up,aMul,rot){
+  // rot: カードの表示回転(タップ等)。破片の初期配置と絵をこの回転に合わせ、飛散・重力は画面基準のまま
+  const baseRot=(rot!=null?rot:(up?Math.PI:0));
+  const cx0=src.x+src.w/2, cy0=src.y+src.h/2;
+  const pw=src.w/SG.cols, ph=src.h/SG.rows;
+  const spw=cv.width/SG.cols, sph=cv.height/SG.rows;
+  const cosR=Math.cos(baseRot), sinR=Math.sin(baseRot);
+  ctx.save();
+  SG.sh.forEach(sd=>{
+    // カードローカルの破片中心 → 回転して画面座標へ
+    const lx=(sd.c+0.5)*pw-src.w/2, ly=(sd.r+0.5)*ph-src.h/2;
+    const bx=cx0+lx*cosR-ly*sinR, by=cy0+lx*sinR+ly*cosR;
+    const gv=(up?-320:320)*k*k;
+    const px=bx+sd.vx*k, py=by+sd.vy*k+gv;
+    ctx.globalAlpha=Math.max(0,(1-k*1.12)*(aMul==null?1:aMul));
+    ctx.translate(px,py);ctx.rotate(baseRot+sd.vr*k);
+    ctx.drawImage(cv,sd.c*spw,sd.r*sph,spw,sph,-pw/2,-ph/2,pw,ph);
+    ctx.setTransform(1,0,0,1,0,0);
+  });
+  ctx.restore();
+}
+function makeAnim(step,pre,post){
+  const d=step.data||{}, t=step.type;
+  const Lpre=computeLayoutFor(pre), Lpost=computeLayoutFor(post);
+  const gp=i=>Lpre.players[i], gq=i=>Lpost.players[i];
+  const flyCard=(from,to,visual,opts)=>({
+    base:pre,hide:opts&&opts.hidePre,
+    draw(tt){
+      const e=EASE(tt);
+      const x=lerp(from.x,to.x,e),y=lerp(from.y,to.y,e);
+      const w=lerp(from.w,to.w,e),h=lerp(from.h,to.h,e);
+      drawCard(x,y,w,h,Object.assign({},visual,{glow:(opts&&opts.glow)||null}));
+      if(opts&&opts.trail){ctx.save();ctx.globalAlpha=.25*(1-tt);drawCard(lerp(from.x,to.x,e*.8),lerp(from.y,to.y,e*.8),w,h,visual);ctx.restore();}
+    }});
+  switch(t){
+    case 'draw':{const g=gp(d.p);return flyCard(g.deck,{x:g.handPos.x,y:g.handPos.y,w:g.deck.w*0.9,h:g.deck.h*0.9},{faceDown:true,upside:g.flip});}
+    case 'charge':{const g=gp(d.p);
+      if(config.manaRow){
+        const q=gq(d.p);const sl=q.manaSlots[q.manaSlots.length-1];
+        if(sl){const from=d.fromDeck?g.deck:{x:g.handPos.x,y:g.handPos.y,w:sl.w,h:sl.h};const a=flyCard(from,sl,{card:d.card,faceDown:!d.card,upside:!q.flip,tapped:d.tapped,tapRot:-Math.PI/2},{glow:'#3fae5a'});a.seAt=0.88;return a;}
+        return {base:post,draw(){}};
+      }
+      if(d.showZone){
+        const q=gq(d.p),pz=P(post,d.p).manaZ,mi=pz.length-1;
+        return {base:post,seAt:0.62,draw(tt){
+          const a=tt<0.16?EASE(tt/0.16):(tt>0.84?EASE((1-tt)/0.16):1);
+          const {slots}=drawManaZone(q,pz,a,tt<0.62?mi:-1);
+          if(tt<0.62&&slots[mi]){const e=EASE(Math.max(0,(tt-0.12))/0.5);
+            const from=d.fromDeck?g.deck:{x:g.handPos.x,y:g.handPos.y,w:g.deck.w,h:g.deck.h},sl=slots[mi];
+            ctx.save();ctx.globalAlpha=a;
+            drawCard(lerp(from.x,sl.x,e),lerp(from.y,sl.y,e),lerp(from.w,sl.w,e),lerp(from.h,sl.h,e),{card:d.card,faceDown:!d.card&&e<0.5,upside:!q.flip,tapped:d.tapped&&e>0.85,tapRot:-Math.PI/2,glow:'#3fae5a'});
+            ctx.restore();}
+        }};
+      }
+      const to={x:g.manaPos.x,y:g.manaPos.y,w:g.deck.w*0.8,h:g.deck.h*0.8};
+      const a0=flyCard(d.fromDeck?g.deck:{x:g.handPos.x,y:g.handPos.y+(g.flip?-40:40),w:g.deck.w,h:g.deck.h},to,{card:d.card,faceDown:!d.card,upside:g.flip},{glow:'#3fae5a'});a0.seAt=0.88;return a0;}
+    case 'addshield':{const g=gp(d.p),q=gq(d.p),to=q.shields[q.shields.length-1]||g.shieldRow;
+      const from=d.fromHand?{x:g.handPos.x,y:g.handPos.y,w:g.deck.w,h:g.deck.h}:g.deck;
+      return flyCard(from,to,{faceDown:true,upside:g.flip},{glow:'#f0c33c'});}
+    case 'summon':case 'revive':{
+      const q=gq(d.p);const cr=q.battle.find(b=>b.uid===d.uid)||q.bz;
+      const from=t==='revive'?gp(d.p).grave:{x:gp(d.p).handPos.x,y:gp(d.p).handPos.y,w:cr.w,h:cr.h};
+      return {base:pre,draw(tt){
+        if(tt<0.55){const e=EASE(tt/0.55);
+          drawCard(lerp(from.x,cr.x,e),lerp(from.y,cr.y,e),lerp(from.w||cr.w,cr.w,e),lerp(from.h||cr.h,cr.h,e),{card:d.card,glow:'#fff',upside:gq(d.p).flip});
+        }else{
+          drawCard(cr.x,cr.y,cr.w,cr.h,{card:d.card,glow:'#f0c33c',scale:1+0.12*Math.sin((tt-0.55)/0.45*Math.PI),upside:gq(d.p).flip,tapped:d.tapped&&tt>0.85});
+          const c=ctr(cr),rr2=(tt-0.55)/0.45;
+          ctx.save();ctx.globalAlpha=1-rr2;ctx.strokeStyle='#f0c33c';ctx.lineWidth=5;
+          ctx.beginPath();ctx.arc(c.x,c.y,cr.w*(0.6+rr2*1.2),0,7);ctx.stroke();ctx.restore();
+        }}};}
+    case 'psummon':{
+      const q=gq(d.p);const cr=q.battle.find(b=>b.uid===d.uid)||q.bz;
+      const from=gp(d.p).partner;const card=P(pre,d.p).partner.card;
+      return {base:pre,hide:{partner:d.p},draw(tt){
+        if(tt<0.5){const e=EASE(tt/0.5);
+          drawCard(lerp(from.x,cr.x,e),lerp(from.y,cr.y,e),lerp(from.w,cr.w,e),lerp(from.h,cr.h,e),{card,glow:'#f0c33c',upside:gq(d.p).flip});
+        }else{
+          drawCard(cr.x,cr.y,cr.w,cr.h,{card,glow:'#f0c33c',scale:1+0.15*Math.sin((tt-0.5)/0.5*Math.PI),upside:gq(d.p).flip});
+          const c=ctr(cr),k=(tt-0.5)/0.5;
+          ctx.save();ctx.globalAlpha=1-k;ctx.strokeStyle='#f0c33c';ctx.lineWidth=7;
+          ctx.beginPath();ctx.arc(c.x,c.y,cr.w*(0.6+k*1.6),0,7);ctx.stroke();ctx.restore();
+        }}};}
+    case 'preturn':{
+      const g=gp(d.p);const src=g.battle.find(b=>{const c=P(pre,d.p).battle.find(x=>x.uid===b.uid);return c&&c.partner;})||g.grave;
+      const card=P(pre,d.p).partner.card;
+      return {base:pre,hide:src.uid!=null?{uid:src.uid}:null,draw(tt){
+        const e=EASE(tt);const to=g.partner;
+        const fd=tt>0.5;
+        drawCard(lerp(src.x,to.x,e),lerp(src.y,to.y,e),lerp(src.w,to.w,e),lerp(src.h,to.h,e),{card,faceDown:fd,partner:!fd,glow:'#f0c33c',upside:g.flip});
+      }};}
+    case 'spell':{
+      const g=gp(d.p),c={x:g.bz.x+g.bz.w/2-90,y:g.bz.y+g.bz.h/2-125,w:180,h:250};
+      if(!g.big){c.w=120;c.h=167;c.x=g.bz.x+g.bz.w/2-60;c.y=g.bz.y+g.bz.h/2-83;}
+      return {base:pre,draw(tt){
+        if(tt<0.6){drawCard(c.x,c.y,c.w,c.h,{card:d.card,glow:'#2e7fe0',scale:tt<0.2?lerp(0.4,1,tt/0.2):1,upside:g.flip});
+          }
+        else{const e=EASE((tt-0.6)/0.4);
+          drawCard(lerp(c.x,g.grave.x,e),lerp(c.y,g.grave.y,e),lerp(c.w,g.grave.w,e),lerp(c.h,g.grave.h,e),{card:d.card,alpha:1-e*0.3,upside:g.flip});}
+      }};}
+    case 'attack':{
+      const g=gp(d.p);const src=g.battle.find(b=>b.uid===d.uid);
+      const card=P(pre,d.p).battle.find(b=>b.uid===d.uid);
+      let to;
+      const tg=d.target||{};
+      const gt=gp(tg.tp!=null?tg.tp:d.p);
+      if(tg.kind==='creature'){const tr=gt.battle.find(b=>b.uid===tg.uid);to=tr?ctr(tr):ctr(gt.rect);}
+      else if(tg.kind==='shield'&&gt.shields[tg.idx])to=ctr(gt.shields[tg.idx]);
+      else to=ctr(gt.rect);
+      if(!src)return {base:pre,draw(){}};
+      const c0=ctr(src);
+      return {base:pre,hide:{uid:d.uid},draw(tt){
+        let x,y;
+        if(tt<0.45){const e=Math.pow(tt/0.45,2);x=lerp(c0.x,to.x,e);y=lerp(c0.y,to.y,e);}
+        else if(tt<0.6){x=to.x;y=to.y;          ctx.save();ctx.globalAlpha=(1-(tt-0.45)/0.15)*0.35;ctx.fillStyle='#ff3b1f';ctx.fillRect(0,0,W,H);ctx.restore();}
+        else{const e=EASE((tt-0.6)/0.4);x=lerp(to.x,c0.x,e);y=lerp(to.y,c0.y,e);}
+        drawCard(x-src.w/2,y-src.h/2,src.w,src.h,{card:card?card.card:null,tapped:tt>0.6,glow:'#e0452f',upside:g.flip});
+      }};}
+    case 'block':{
+      const g=gp(d.p);const src=g.battle.find(b=>b.uid===d.uid);
+      const card=P(pre,d.p).battle.find(b=>b.uid===d.uid);
+      if(!src)return {base:pre,draw(){}};
+      return {base:pre,hide:{uid:d.uid},draw(tt){
+        drawCard(src.x,src.y,src.w,src.h,{card:card?card.card:null,tapped:tt>0.4,glow:'#2e7fe0',scale:1+0.1*Math.sin(tt*Math.PI),upside:g.flip});
+      }};}
+    case 'destroy':{
+      const g=gp(d.tp);const src=g.battle.find(b=>b.uid===d.uid);
+      const card=P(pre,d.tp).battle.find(b=>b.uid===d.uid);
+      if(!src)return {base:pre,draw(){}};
+      const cv=shardSource(card?card.card:null,src.w*2,src.h*2);
+      const SG=makeShards((d.uid||1)*13+5);
+      const up=g.flip;
+      return {base:pre,hide:{uid:d.uid},draw(tt){
+        if(tt<0.26){
+          const sh=Math.sin(tt*44)*(6*(1-tt/0.26));
+          drawCard(src.x+sh,src.y,src.w,src.h,{card:card?card.card:null,tapped:card&&card.tapped,glow:'#e0452f',upside:up});
+        }else{
+          const rot=(up?Math.PI:0)+(card&&card.tapped?Math.PI/2:0);
+          shatterDraw(cv,SG,src,(tt-0.26)/0.74,up,null,rot);
+        }
+      }};}
+    case 'exile':{
+      const g=gp(d.tp);const src=g.battle.find(b=>b.uid===d.uid);
+      const card=P(pre,d.tp).battle.find(b=>b.uid===d.uid);
+      if(!src)return {base:pre,draw(){}};
+      return {base:pre,hide:{uid:d.uid},draw(tt){
+        const k=EASE(tt);
+        ctx.save();ctx.globalAlpha=1-k;
+        drawCard(src.x+src.w/2*k,src.y+src.h/2*k,src.w*(1-k),src.h*(1-k),{card:card?card.card:null,tapped:card&&card.tapped,glow:'#b56bff',upside:g.flip});
+        ctx.restore();
+      }};}
+    case 'smana':{
+      const g=gp(d.tp);const sr=g.shields[d.idx];
+      if(!sr)return {base:post,seAt:0.55,draw(){}};
+      const to={x:g.manaPos.x,y:g.manaPos.y,w:sr.w*0.8,h:sr.h*0.8};
+      return {base:pre,hide:{shield:{p:d.tp,idx:d.idx}},draw(tt){
+        const e=EASE(tt);
+        drawCard(lerp(sr.x,to.x,e),lerp(sr.y,to.y,e),lerp(sr.w,to.w,e),lerp(sr.h,to.h,e),{faceDown:true,glow:'#3fae5a',alpha:1-e*0.2,upside:g.flip});
+      }};}
+    case 'stodeck':{
+      const g=gp(d.tp);const sr=g.shields[d.idx];
+      if(!sr)return {base:post,draw(){}};
+      return {base:pre,hide:{shield:{p:d.tp,idx:d.idx}},draw(tt){
+        const e=EASE(tt);
+        drawCard(lerp(sr.x,g.deck.x,e),lerp(sr.y,g.deck.y,e),lerp(sr.w,g.deck.w,e),lerp(sr.h,g.deck.h,e),{faceDown:true,glow:'#7e95d8',alpha:1-e*0.25,upside:g.flip});
+      }};}
+    case 'mtodeck':{
+      const q=gq(d.p),g=gp(d.p);const pzPre=P(pre,d.p).manaZ;
+      const mc=pzPre[d.mi];
+      if(config.manaRow){
+        const sl=g.manaSlots[d.mi];
+        if(!sl)return {base:post,draw(){}};
+        return flyCard(sl,g.deck,{faceDown:true,upside:g.flip},{glow:'#7e95d8',hidePre:{mana:{p:d.p,mi:d.mi}}});
+      }
+      if(d.showZone===false){
+        const from={x:g.manaPos.x,y:g.manaPos.y,w:g.deck.w*0.8,h:g.deck.h*0.8};
+        return flyCard(from,g.deck,{faceDown:true,upside:g.flip},{glow:'#7e95d8'});
+      }
+      return {base:pre,draw(tt){
+        const a=tt<0.16?EASE(tt/0.16):(tt>0.84?EASE((1-tt)/0.16):1);
+        const {slots}=drawManaZone(q,pzPre,a,tt>0.22?d.mi:-1);
+        const sl=slots[d.mi];
+        if(sl&&tt>=0.22){
+          const e=EASE(Math.min(1,(tt-0.22)/0.62));
+          ctx.save();ctx.globalAlpha=a;
+          drawCard(lerp(sl.x,g.deck.x,e),lerp(sl.y,g.deck.y,e),lerp(sl.w,g.deck.w,e),lerp(sl.h,g.deck.h,e),{card:e<0.5?(mc?mc.card:null):null,faceDown:e>=0.5,glow:'#7e95d8',upside:g.flip});
+          ctx.restore();
+        }
+      }};}
+    case 'bounce':case 'tomana':case 'toshield':case 'todeck':{
+      const g=gp(d.tp);const src=g.battle.find(b=>b.uid===d.uid);
+      const card=P(pre,d.tp).battle.find(b=>b.uid===d.uid);
+      if(!src)return {base:pre,draw(){}};
+      let to,glow;
+      if(t==='bounce'){to={x:g.handPos.x,y:g.handPos.y,w:src.w*0.7,h:src.h*0.7};glow='#2e7fe0';}
+      else if(t==='todeck'){to={x:g.deck.x,y:g.deck.y,w:g.deck.w,h:g.deck.h};glow='#7e95d8';}
+      else if(t==='tomana'){to={x:g.manaPos.x,y:g.manaPos.y,w:src.w*0.6,h:src.h*0.6};glow='#3fae5a';}
+      else {const q=gq(d.tp);to=q.shields[q.shields.length-1]||g.shieldRow;glow='#7e95d8';}
+      return flyCard(src,to,{card:card?card.card:null,faceDown:t==='toshield'||t==='todeck',tapped:card&&card.tapped&&t!=='toshield'&&t!=='todeck',upside:g.flip},{hidePre:{uid:d.uid},glow});}
+    case 'recover':{const g=gp(d.p);
+      return flyCard(g.grave,{x:g.handPos.x,y:g.handPos.y,w:g.grave.w,h:g.grave.h},{card:d.card,upside:g.flip},{glow:'#2e7fe0'});}
+    case 'sbounce':{
+      const g=gp(d.tp);const sr=g.shields[d.idx];
+      if(!sr)return {base:post,draw(){}};
+      return {base:pre,hide:{shield:{p:d.tp,idx:d.idx}},draw(tt){
+        const e=EASE(tt);
+        drawCard(lerp(sr.x,g.handPos.x,e),lerp(sr.y,g.handPos.y,e),sr.w,sr.h,{faceDown:true,glow:'#2e7fe0',alpha:1-e*0.25,upside:g.flip});
+      }};}
+    case 'shieldburn':{
+      const g=gp(d.tp);const sr=g.shields[d.idx];
+      if(!sr)return {base:post,draw(){}};
+      let sd=d.idx*77+13; const rnd=()=>{sd=(sd*16807)%2147483647;return sd/2147483647;};
+      const parts=[];for(let i=0;i<28;i++)parts.push({fx:rnd(),ph:rnd(),sp:0.7+rnd()*0.9,sz:2.5+rnd()*4.5,wob:2+rnd()*5});
+      const up=g.flip;
+      return {base:pre,hide:{shield:{p:d.tp,idx:d.idx}},draw(tt){
+        const k=Math.min(1,tt/0.85); // 燃え進行(下→上)
+        const burnY=sr.y+sr.h*(1-k);
+        if(k<0.99){
+          // 燃え残り(上部)のみ表示
+          ctx.save();ctx.beginPath();
+          ctx.rect(sr.x-14,sr.y-14,sr.w+28,Math.max(0,sr.h*(1-k))+14);ctx.clip();
+          drawCard(sr.x,sr.y,sr.w,sr.h,{faceDown:true,upside:up,glow:'#ff7830'});
+          ctx.restore();
+          // 燃え際: 明るいエンバーライン + 焦げ
+          const grd=ctx.createLinearGradient(0,burnY-12,0,burnY+10);
+          grd.addColorStop(0,'rgba(255,220,120,0)');
+          grd.addColorStop(0.45,'rgba(255,170,60,.95)');
+          grd.addColorStop(0.7,'rgba(200,60,10,.8)');
+          grd.addColorStop(1,'rgba(60,10,0,0)');
+          ctx.fillStyle=grd;
+          ctx.fillRect(sr.x-3,burnY-12,sr.w+6,22);
+        }
+        // 立ちのぼる炎パーティクル
+        ctx.save();
+        parts.forEach(pt=>{
+          const life=(tt*pt.sp*1.4+pt.ph)%1;
+          const px=sr.x+pt.fx*sr.w+Math.sin(tt*9+pt.ph*12)*pt.wob;
+          const py=burnY-life*sr.h*0.9;
+          if(py<sr.y-36)return;
+          const a=(1-life)*Math.min(1,tt*4)*(tt>0.88?(1-tt)/0.12:1);
+          if(a<=0)return;
+          ctx.globalAlpha=Math.min(1,a);
+          const rad=Math.max(0.5,pt.sz*(1-life*0.6));
+          const cg=ctx.createRadialGradient(px,py,0,px,py,rad*2.2);
+          cg.addColorStop(0,'#ffefb0');cg.addColorStop(0.45,'#ff9838');cg.addColorStop(1,'rgba(190,40,0,0)');
+          ctx.fillStyle=cg;
+          ctx.beginPath();ctx.arc(px,py,rad*2.2,0,7);ctx.fill();
+        });
+        // 灰の粒(燃え際から下へ舞う)
+        parts.slice(0,10).forEach(pt=>{
+          const life=(tt*pt.sp+pt.ph*0.7)%1;
+          const px=sr.x+pt.fx*sr.w+Math.sin(tt*5+pt.ph*7)*8;
+          const py=burnY+life*40;
+          const a=(1-life)*0.5*Math.min(1,k*3)*(tt>0.9?(1-tt)/0.1:1);
+          if(a<=0)return;
+          ctx.globalAlpha=a;
+          ctx.fillStyle='#6a6a6a';
+          ctx.fillRect(px,py,2.2,2.2);
+        });
+        ctx.restore();
+      }};}
+    case 'break':{
+      const g=gp(d.tp);const sr=g.shields[d.idx];
+      if(!sr)return {base:post,draw(){}};
+      const cv=shardSourceBack(sr.w*2,sr.h*2);
+      const SG=makeShards(d.idx*31+7);
+      const up=g.flip;
+      return {base:pre,hide:{shield:{p:d.tp,idx:d.idx}},draw(tt){
+        if(tt<0.26){
+          const sh=Math.sin(tt*44)*(6*(1-tt/0.26));
+          drawCard(sr.x+sh,sr.y,sr.w,sr.h,{faceDown:true,glow:'#e0452f',upside:up});
+        }else{
+          shatterDraw(cv,SG,sr,(tt-0.26)/0.74,up);
+        }
+      }};}
+    case 'trigger':{
+      const g=gp(d.tp);const sr=g.shields[d.idx];
+      if(!sr)return {base:pre,draw(){}};
+      const isT=true;
+      const c=ctr(sr);
+      const dest={x:g.handPos.x,y:g.handPos.y,w:sr.w,h:sr.h};
+      return {base:pre,hide:{shield:{p:d.tp,idx:d.idx}},draw(tt){
+        if(tt<0.35){ // flip
+          const k=tt/0.35;const sx=Math.abs(Math.cos(k*Math.PI));const showBack=k<0.5;
+          ctx.save();ctx.translate(c.x,c.y);ctx.scale(Math.max(sx,0.02),1);
+          drawCard(-sr.w/2,-sr.h/2,sr.w,sr.h,{faceDown:showBack,card:isT?d.card:null,glow:isT?'#f0c33c':'#ff5540',upside:g.flip});
+          ctx.restore();
+          if(!isT&&k>0.5){ctx.save();ctx.strokeStyle='#ff5540';ctx.lineWidth=7;ctx.globalAlpha=(k-0.5)*2;
+            ctx.beginPath();ctx.moveTo(sr.x-14,sr.y+sr.h+10);ctx.lineTo(sr.x+sr.w+14,sr.y-10);ctx.stroke();ctx.restore();}
+        }else if(isT&&tt<0.7){ // トリガー見せ
+          const k=(tt-0.35)/0.35;
+          drawCard(c.x-sr.w*0.8,c.y-sr.h*0.8,sr.w*1.6,sr.h*1.6,{card:d.card,glow:'#f0c33c',upside:g.flip});
+        }else{
+          const k=isT?(tt-0.7)/0.3:(tt-0.35)/0.65;const e=EASE(k);
+          drawCard(lerp(sr.x,dest.x,e),lerp(sr.y,dest.y,e),lerp(sr.w,dest.w,e),lerp(sr.h,dest.h,e),{card:isT?d.card:null,faceDown:!isT,alpha:1-k*0.2,upside:g.flip});
+        }
+      }};}
+    case 'spend':{
+      if(config.manaRow)return {base:post,draw(){}};
+      if(!d.showZone)return {base:post,draw(){}};
+      const q=gq(d.p),pzPre=P(pre,d.p).manaZ,pzPost=P(post,d.p).manaZ;
+      return {base:pre,draw(tt){
+        const a=tt<0.18?EASE(tt/0.18):(tt>0.8?EASE((1-tt)/0.2):1);
+        const pz=tt<0.45?pzPre:pzPost;
+        drawManaZone(q,pz,a,-1);
+      }};}
+    case 'mtap':{
+      if(config.manaRow)return {base:post,draw(){}};
+      const q=gq(d.p),pzPre=P(pre,d.p).manaZ,pzPost=P(post,d.p).manaZ;
+      return {base:pre,draw(tt){
+        const a=tt<0.18?EASE(tt/0.18):(tt>0.8?EASE((1-tt)/0.2):1);
+        drawManaZone(q,tt<0.45?pzPre:pzPost,a,-1);
+      }};}
+    case 'ability':{
+      const g=gp(d.tp);
+      const isP=d.kind==='partner';
+      const rect=isP?g.partner:g.battle.find(b=>b.uid===d.uid);
+      const it=isP?null:P(pre,d.tp).battle.find(b=>b.uid===d.uid);
+      const card=isP?P(pre,d.tp).partner.card:(it?it.card:null);
+      if(!rect)return {base:post,draw(){}};
+      const rotA=(g.flip?Math.PI:0)+(it&&it.tapped?Math.PI/2:0);
+      return {base:pre,draw(tt){
+        // 明滅する金の発光枠 + 軽いパルス（カードの回転に追従）
+        const endFade=tt>0.85?(1-tt)/0.15:1;
+        const blink=(0.35+0.65*Math.abs(Math.sin(tt*Math.PI*3)))*endFade;
+        const sc=1+0.06*Math.sin(tt*Math.PI*2);
+        drawCard(rect.x,rect.y,rect.w,rect.h,{card,tapped:it&&it.tapped,partner:isP,upside:g.flip,glow:'#f0c33c',scale:sc});
+        ctx.save();ctx.globalAlpha=blink;
+        ctx.translate(rect.x+rect.w/2,rect.y+rect.h/2);ctx.rotate(rotA);
+        ctx.strokeStyle='#ffe98a';ctx.lineWidth=5;
+        ctx.shadowColor='#f0c33c';ctx.shadowBlur=26;
+        rr(-rect.w/2-7,-rect.h/2-7,rect.w+14,rect.h+14,10);ctx.stroke();
+        ctx.restore();
+      }};}
+    case 'target':{
+      const g=gp(d.tp);
+      const rect=d.kind==='shield'?g.shields[d.idx]:d.kind==='panel'?g.rect:d.kind==='partner'?g.partner:g.battle.find(b=>b.uid===d.uid);
+      if(!rect)return {base:post,draw(){}};
+      const itT=(!d.kind||d.kind==='creature')?P(pre,d.tp).battle.find(b=>b.uid===d.uid):null;
+      const rotT=d.kind==='panel'?0:(g.flip?Math.PI:0)+(itT&&itT.tapped?Math.PI/2:0);
+      return {base:pre,draw(tt){
+        // 赤いターゲット枠が点滅 + 四隅マーカーが収縮
+        const endFadeT=tt>0.85?(1-tt)/0.15:1;
+        const on=(Math.sin(tt*Math.PI*7)>0?1:0.18)*endFadeT;
+        const mg=(d.kind==='panel'?4:8)+5*(1-EASE(Math.min(1,tt*2)));
+        ctx.save();ctx.globalAlpha=on;
+        ctx.translate(rect.x+rect.w/2,rect.y+rect.h/2);ctx.rotate(rotT);
+        const cx=-rect.w/2-mg,cy=-rect.h/2-mg,cw=rect.w+mg*2,ch=rect.h+mg*2;
+        ctx.strokeStyle='#ff5540';ctx.shadowColor='#ff5540';ctx.shadowBlur=18;
+        ctx.lineWidth=3.5;
+        rr(cx,cy,cw,ch,10);ctx.stroke();
+        const L=Math.min(26,cw*0.22,ch*0.22);
+        ctx.lineWidth=6.5;ctx.beginPath();
+        ctx.moveTo(cx+L,cy);ctx.lineTo(cx,cy);ctx.lineTo(cx,cy+L);
+        ctx.moveTo(cx+cw-L,cy);ctx.lineTo(cx+cw,cy);ctx.lineTo(cx+cw,cy+L);
+        ctx.moveTo(cx+L,cy+ch);ctx.lineTo(cx,cy+ch);ctx.lineTo(cx,cy+ch-L);
+        ctx.moveTo(cx+cw-L,cy+ch);ctx.lineTo(cx+cw,cy+ch);ctx.lineTo(cx+cw,cy+ch-L);
+        ctx.stroke();
+        ctx.restore();
+      }};}
+    case 'evolve':{
+      const g=gp(d.tp);const src=g.battle.find(b=>b.uid===d.uid);
+      const it=P(pre,d.tp).battle.find(b=>b.uid===d.uid);
+      if(!src)return {base:post,draw(){}};
+      const from={x:g.handPos.x,y:g.handPos.y,w:src.w,h:src.h};
+      return {base:pre,draw(tt){
+        if(tt<0.7){const e=EASE(tt/0.7);
+          drawCard(lerp(from.x,src.x,e),lerp(from.y,src.y-(g.flip?-14:14)*(1-e),e),src.w,src.h,{card:d.card,glow:'#f0c33c',upside:g.flip});
+        }else{
+          // 進化元をunder位置へスライドさせつつ新カードをポップ（終了時の段差防止）
+          const k=EASE((tt-0.7)/0.3);
+          const off=9*k;
+          const dx=it&&it.tapped?(g.flip?-off:off):0;
+          const dy=it&&it.tapped?0:(g.flip?off:-off);
+          drawCard(src.x+dx,src.y+dy,src.w,src.h,{card:it?it.card:null,alpha:.85+0.15*(1-k),upside:g.flip,tapped:it&&it.tapped});
+          drawCard(src.x,src.y,src.w,src.h,{card:d.card,glow:'#f0c33c',upside:g.flip,tapped:it&&it.tapped&&tt>0.92,scale:1+0.1*Math.sin(k*Math.PI)});
+        }
+      }};}
+    case 'meteor':{
+      const g=gp(d.tp);const src=g.battle.find(b=>b.uid===d.uid);
+      const it=P(pre,d.tp).battle.find(b=>b.uid===d.uid);
+      const uc=it&&it.under&&it.under.length?it.under[it.under.length-1]:null;
+      if(!src)return {base:post,draw(){}};
+      return {base:post,draw(tt){
+        const e=EASE(tt);
+        const off=10+18*Math.min(1,tt*3); // 名前側からスッと抜け出す
+        const tp0=it&&it.tapped&&tt<0.5;
+        const sx=src.x+(tp0?(g.flip?-off:off):0), sy=src.y+(tp0?0:(g.flip?off:-off));
+        ctx.save();ctx.globalAlpha=tt>0.85?(1-tt)/0.15:1;
+        drawCard(lerp(sx,g.grave.x,e),lerp(sy,g.grave.y,e),lerp(src.w,g.grave.w,e),lerp(src.h,g.grave.h,e),{card:uc,tapped:it&&it.tapped&&tt<0.5,glow:'#ff8a30',upside:g.flip});
+        ctx.restore();
+      }};}
+    case 'devolve':{
+      const g=gp(d.tp);const src=g.battle.find(b=>b.uid===d.uid);
+      const it=P(pre,d.tp).battle.find(b=>b.uid===d.uid);
+      if(!src||!it)return {base:post,draw(){}};
+      return {base:post,draw(tt){
+        const e=EASE(tt);
+        drawCard(lerp(src.x,g.grave.x,e),lerp(src.y,g.grave.y,e),lerp(src.w,g.grave.w,e),lerp(src.h,g.grave.h,e),{card:it.card,tapped:it.tapped&&tt<0.5,alpha:1-e*0.3,glow:'#a06be0',upside:g.flip});
+      }};}
+    case 'discard':{
+      const g=gp(d.p);
+      const from=d.fromHand?{x:g.handPos.x,y:g.handPos.y}:d.fromDeck?{x:g.deck.x,y:g.deck.y}:{x:g.grave.x,y:g.grave.y-(g.flip?-40:40)};
+      return {base:post,draw(tt){
+        const e=EASE(tt);
+        drawCard(lerp(from.x,g.grave.x,e),lerp(from.y,g.grave.y,e),g.grave.w,g.grave.h,{card:d.card,alpha:0.4+0.6*e,upside:g.flip});
+      }};}
+    case 'msummon':{
+      const q=gq(d.p);const cr=q.battle.find(b=>b.uid===d.uid)||q.bz;
+      const pzPre=P(pre,d.p).manaZ;
+      if(config.manaRow){
+        const gPre=gp(d.p);const sl=gPre.manaSlots[d.mi];
+        if(!sl)return {base:post,draw(){}};
+        return {base:pre,seAt:0.7,hide:{mana:{p:d.p,mi:d.mi}},draw(tt){
+          if(tt<0.7){const e=EASE(tt/0.7);
+            drawCard(lerp(sl.x,cr.x,e),lerp(sl.y,cr.y,e),lerp(sl.w,cr.w,e),lerp(sl.h,cr.h,e),{card:d.card,glow:'#f0c33c',upside:tt<0.4?!gPre.flip:gPre.flip});
+          }else{
+            drawCard(cr.x,cr.y,cr.w,cr.h,{card:d.card,glow:'#f0c33c',upside:gPre.flip,tapped:d.tapped&&tt>0.9,scale:1+0.12*Math.sin((tt-0.7)/0.3*Math.PI)});
+          }
+        }};
+      }
+      return {base:pre,seAt:0.74,draw(tt){
+        const a=tt<0.14?EASE(tt/0.14):(tt>0.62?EASE(Math.max(0,(0.8-tt)/0.18)):1);
+        if(a>0){const {slots}=drawManaZone(q,pzPre,a,tt>0.2?d.mi:-1);
+          if(tt>=0.2&&tt<0.74&&slots[d.mi]){const e=EASE((tt-0.2)/0.54);const sl=slots[d.mi];
+            ctx.save();ctx.globalAlpha=Math.max(a,e); // 枠から離れるほど実体化
+            drawCard(lerp(sl.x,cr.x,e),lerp(sl.y,cr.y,e),lerp(sl.w,cr.w,e),lerp(sl.h,cr.h,e),{card:d.card,glow:'#f0c33c',upside:tt<0.45?!q.flip:q.flip});
+            ctx.restore();}
+        }
+        if(tt>=0.74){
+          drawCard(cr.x,cr.y,cr.w,cr.h,{card:d.card,glow:'#f0c33c',upside:q.flip,tapped:d.tapped&&tt>0.9,scale:1+0.12*Math.sin((tt-0.74)/0.26*Math.PI)});
+        }
+      }};}
+    case 'mdestroy':case 'mbounce':{
+      const q=gq(d.p),g=gp(d.p);const pzPre=P(pre,d.p).manaZ;
+      const isB=t==='mbounce';
+      const mc=pzPre[d.mi];
+      if(config.manaRow){
+        const sl=g.manaSlots[d.mi];
+        if(!sl)return {base:post,draw(){}};
+        if(isB)return flyCard(sl,{x:g.handPos.x,y:g.handPos.y,w:sl.w,h:sl.h},{card:mc?mc.card:null,upside:g.flip},{glow:'#2e7fe0',hidePre:{mana:{p:d.p,mi:d.mi}}});
+        const cv=shardSource(mc?mc.card:null,sl.w*2,sl.h*2);
+        const SG=makeShards(d.mi*17+3);
+        const upM=!g.flip;
+        const rotM=(upM?Math.PI:0)+(mc&&mc.tapped?-Math.PI/2:0);
+        return {base:pre,hide:{mana:{p:d.p,mi:d.mi}},draw(tt){
+          if(tt<0.26)drawCard(sl.x,sl.y,sl.w,sl.h,{card:mc?mc.card:null,glow:'#e0452f',upside:upM,tapped:mc&&mc.tapped,tapRot:-Math.PI/2});
+          else shatterDraw(cv,SG,sl,(tt-0.26)/0.74,upM,null,rotM);
+        }};
+      }
+      if(d.showZone===false){
+        const from={x:g.manaPos.x,y:g.manaPos.y,w:g.deck.w*0.9,h:g.deck.h*0.9};
+        if(isB)return flyCard(from,{x:g.handPos.x,y:g.handPos.y,w:70,h:98},{card:mc?mc.card:null,upside:g.flip},{glow:'#2e7fe0'});
+        const cv=shardSource(mc?mc.card:null,from.w*2,from.h*2);
+        const SG=makeShards(d.mi*17+3);
+        return {base:pre,draw(tt){
+          if(tt<0.26)drawCard(from.x,from.y,from.w,from.h,{card:mc?mc.card:null,glow:'#e0452f',upside:g.flip});
+          else shatterDraw(cv,SG,from,(tt-0.26)/0.74,g.flip);
+        }};
+      }
+      // 枠表示版: 枠・マナカード・対象カードを同一エンベロープでフェード
+      const upM=!q.flip;
+      return {base:pre,draw(tt){
+        const a=tt<0.16?EASE(tt/0.16):(tt>0.84?EASE((1-tt)/0.16):1);
+        const {slots}=drawManaZone(q,pzPre,a,tt>0.22?d.mi:-1);
+        const sl=slots[d.mi];
+        if(!sl)return;
+        if(tt>=0.22){
+          if(isB){
+            const e=EASE(Math.min(1,(tt-0.22)/0.6));
+            const dest={x:g.handPos.x,y:g.handPos.y,w:sl.w,h:sl.h};
+            ctx.save();ctx.globalAlpha=a;
+            drawCard(lerp(sl.x,dest.x,e),lerp(sl.y,dest.y,e),sl.w,sl.h,{card:mc?mc.card:null,glow:'#2e7fe0',upside:g.flip});
+            ctx.restore();
+          }else{
+            const k=Math.min(1,(tt-0.22)/0.7);
+            if(k<0.24){
+              ctx.save();ctx.globalAlpha=a;
+              const sh=Math.sin(tt*44)*4;
+              drawCard(sl.x+sh,sl.y,sl.w,sl.h,{card:mc?mc.card:null,glow:'#e0452f',upside:upM,tapped:mc&&mc.tapped,tapRot:-Math.PI/2});
+              ctx.restore();
+            }else{
+              const cv=this._cv||(this._cv=shardSource(mc?mc.card:null,sl.w*2,sl.h*2));
+              const SG=this._sg||(this._sg=makeShards(d.mi*17+3));
+              const rotM=(upM?Math.PI:0)+(mc&&mc.tapped?-Math.PI/2:0);
+              shatterDraw(cv,SG,sl,(k-0.24)/0.76,upM,a,rotM);
+            }
+          }
+        }
+      }};}
+    case 'mshow':{
+      if(config.manaRow){
+        const q=gq(d.p);
+        return {base:post,draw(tt){
+          if(!q.manaRow)return;
+          const blink=(0.3+0.7*Math.abs(Math.sin(tt*Math.PI*2)))*(tt>0.85?(1-tt)/0.15:1);
+          ctx.save();ctx.globalAlpha=blink;
+          ctx.strokeStyle='#3fae5a';ctx.lineWidth=3;
+          rr(q.manaRow.x-3,q.manaRow.y-3,q.manaRow.w+6,q.manaRow.h+6,10);ctx.stroke();
+          ctx.restore();
+        }};
+      }
+      const q=gq(d.p);const pz=P(post,d.p).manaZ;
+      return {base:post,draw(tt){
+        const a=tt<0.18?EASE(tt/0.18):(tt>0.8?EASE((1-tt)/0.2):1);
+        drawManaZone(q,pz,a,-1);
+      }};}
+    case 'swap':{
+      const ga=gp(d.a.p);
+      const srcA=ga.battle.find(b=>b.uid===d.a.uid);
+      const cardA=P(pre,d.a.p).battle.find(b=>b.uid===d.a.uid);
+      if(!srcA)return {base:post,draw(){}};
+      const upA=ga.flip;
+      if(d.mode==='bb'){
+        const gb=gp(d.b.p);
+        const srcB=gb.battle.find(b=>b.uid===d.b.uid);
+        const cardB=P(pre,d.b.p).battle.find(b=>b.uid===d.b.uid);
+        if(!srcB)return {base:post,draw(){}};
+        const upB=gb.flip;
+        return {base:pre,hide:{uid:d.a.uid},draw(tt){
+          const e=EASE(tt);
+          // Bを個別に隠せないため、Bの上にAを、Aの上にBを交差飛行
+          drawCard(lerp(srcB.x,srcA.x,e),lerp(srcB.y,srcA.y,e),lerp(srcB.w,srcA.w,e),lerp(srcB.h,srcA.h,e),{card:cardB?cardB.card:null,tapped:cardB&&cardB.tapped,glow:'#f0c33c',upside:tt<0.5?upB:upA});
+          drawCard(lerp(srcA.x,srcB.x,e),lerp(srcA.y,srcB.y,e),lerp(srcA.w,srcB.w,e),lerp(srcA.h,srcB.h,e),{card:cardA?cardA.card:null,tapped:cardA&&cardA.tapped,glow:'#f0c33c',upside:tt<0.5?upA:upB});
+        }};
+      }
+      if(d.mode==='bh'){
+        const from={x:ga.handPos.x,y:ga.handPos.y,w:srcA.w,h:srcA.h};
+        return {base:pre,hide:{uid:d.a.uid},draw(tt){
+          const e=EASE(tt);
+          drawCard(lerp(srcA.x,from.x,e),lerp(srcA.y,from.y,e),srcA.w,srcA.h,{card:cardA?cardA.card:null,alpha:1-e*0.5,upside:upA});
+          drawCard(lerp(from.x,srcA.x,e),lerp(from.y,srcA.y,e),srcA.w,srcA.h,{card:d.card,glow:'#f0c33c',upside:upA});
+        }};
+      }
+      // bm: マナゾーン枠を表示して交差
+      const pzPre=P(pre,d.a.p).manaZ;
+      return {base:pre,hide:{uid:d.a.uid},draw(tt){
+        const a=tt<0.16?EASE(tt/0.16):(tt>0.78?EASE((1-tt)/0.22):1);
+        const {slots}=drawManaZone(ga,pzPre,a,d.b.mi);
+        const sl=slots[d.b.mi];
+        if(!sl){return;}
+        const e=EASE(Math.min(1,Math.max(0,(tt-0.12)/0.7)));
+        const mc=pzPre[d.b.mi];
+        drawCard(lerp(sl.x,srcA.x,e),lerp(sl.y,srcA.y,e),lerp(sl.w,srcA.w,e),lerp(sl.h,srcA.h,e),{card:mc?mc.card:null,glow:'#f0c33c',upside:tt<0.5?!upA:upA,tapRot:-Math.PI/2});
+        ctx.save();ctx.globalAlpha=a; // マナ枠側へ入るカードは枠と同期して消える
+        drawCard(lerp(srcA.x,sl.x,e),lerp(srcA.y,sl.y,e),lerp(srcA.w,sl.w,e),lerp(srcA.h,sl.h,e),{card:cardA?cardA.card:null,upside:tt<0.5?upA:!upA,tapRot:-Math.PI/2});
+        ctx.restore();
+      }};}
+    case 'tapToggle':case 'adjust':case 'setpartner':case 'pfaceup':return {base:post,draw(){}};
+    case 'turn':{
+      return {base:post,draw(tt){
+        const a=tt<0.15?tt/0.15:(tt>0.8?(1-tt)/0.2:1);
+        ctx.save();ctx.globalAlpha=a;
+        ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(0,462,W,120);
+        ctx.fillStyle='#fff';ctx.font='900 62px '+FONTF;ctx.textAlign='center';ctx.textBaseline='middle';
+        const nm=config.players[d.p].name;
+        ctx.fillText(`${nm} ターン${(post.turnCounts&&post.turnCounts[d.p])||post.turnNo}`,W/2,522);
+        ctx.strokeStyle=civStroke(config.players[d.p],W*0.2,0,W*0.8,0);ctx.lineWidth=4;
+        ctx.beginPath();ctx.moveTo(W*0.2,462);ctx.lineTo(W*0.8,462);ctx.moveTo(W*0.2,582);ctx.lineTo(W*0.8,582);ctx.stroke();
+        ctx.restore();
+      }};}
+    case 'telop':return {base:post,draw(){}};
+    case 'logo':{
+      const lg=logoList.find(l=>l.id===d.logo);
+      return {base:post,draw(tt){ if(lg){const pos=logoPosFor(d,post);drawLogoPop(lg.img,tt,pos.cx,pos.cy,pos.maxW,pos.maxH);} }};}
+    case 'cutin':{
+      return {base:post,draw(tt){
+        const a=tt<0.18?EASE(tt/0.18):(tt>0.8?EASE((1-tt)/0.2):1);
+        ctx.save();ctx.globalAlpha=a*0.75;ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.restore();
+        // 下部余白を除いた表示領域いっぱいに（はみ出さない範囲で最大化）
+        const uH=H-Math.max(0,config.bottomPad||0);
+        const pct=(config.cutinPct||92)/100;
+        let h=uH*pct, w=h*63/88;
+        const maxW=W*0.62;
+        if(w>maxW){w=maxW;h=w*88/63;}
+        const sc=tt<0.12?lerp(1.5,1,tt/0.12):1+Math.sin(tt*6)*0.008;
+        ctx.save();ctx.globalAlpha=a;
+        ctx.translate(W/2,uH/2);ctx.scale(sc,sc);
+        drawCard(-w/2,-h/2,w,h,{card:d.card,glow:'#f0c33c'});
+        ctx.restore();
+      }};}
+    case 'lose':{
+      const g=gp(d.p),r=g.rect;
+      return {base:pre,draw(tt){
+        const k=EASE(Math.min(1,tt/0.8));
+        ctx.save();ctx.globalAlpha=k*0.9;ctx.fillStyle='#04060a';rr(r.x,r.y,r.w,r.h,14);ctx.fill();ctx.restore();
+      }};}
+    default:return {base:post,draw(){}};
+  }
+}
+function manaZoneLayout(g,n){
+  // プレイヤーのバトルゾーン上に重ねる枠
+  const f={x:g.bz.x+16,y:g.bz.y+8,w:g.bz.w-32,h:g.bz.h-16};
+  const slots=[];
+  if(n>0){
+    const gap=8, pad=14, headH=30;
+    const innerW=f.w-pad*2, innerH=f.h-headH-pad*1.5;
+    let cw=84;
+    let perRow=Math.max(1,Math.floor((innerW+gap)/(cw+gap)));
+    let rows=Math.ceil(n/perRow);
+    let chh=cw*88/63;
+    while(rows*chh+(rows-1)*gap>innerH&&cw>36){
+      cw-=6;chh=cw*88/63;
+      perRow=Math.max(1,Math.floor((innerW+gap)/(cw+gap)));
+      rows=Math.ceil(n/perRow);
+    }
+    for(let k=0;k<n;k++){
+      const rI=Math.floor(k/perRow), cI=k%perRow;
+      const rowN=Math.min(perRow,n-rI*perRow);
+      const rowW=rowN*cw+(rowN-1)*gap;
+      slots.push({x:f.x+pad+(innerW-rowW)/2+cI*(cw+gap),y:f.y+headH+rI*(chh+gap),w:cw,h:chh});
+    }
+  }
+  return {frame:f,slots};
+}
+function drawManaZone(g,pz,alpha,hideIdx){
+  const {frame:f,slots}=manaZoneLayout(g,pz.length);
+  ctx.save();ctx.globalAlpha=alpha;
+  rr(f.x,f.y,f.w,f.h,12);
+  ctx.fillStyle='rgba(7,18,10,.94)';ctx.fill();
+  ctx.strokeStyle='#3fae5a';ctx.lineWidth=2.5;ctx.stroke();
+  ctx.fillStyle='#7fd89a';ctx.font='800 18px '+FONTF;ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText(`マナゾーン ×${pz.length}`,f.x+14,f.y+17);
+  // カード: バトルゾーンと上下左右逆 / タップの見た目方向は同一(tapRot=-90°)
+  const up=!g.flip;
+  pz.forEach((c,k)=>{
+    if(k===hideIdx)return;
+    const sl=slots[k];
+    drawCard(sl.x,sl.y,sl.w,sl.h,{card:c.card,tapped:c.tapped,upside:up,tapRot:-Math.PI/2});
+  });
+  ctx.restore();
+  return {frame:f,slots};
+}
+function drawLogoPop(img,tt,cx,cy,maxW,maxH){
+  if(!img)return;
+  const a=tt<0.12?tt/0.12:(tt>0.82?(1-tt)/0.18:1);
+  const sc=tt<0.14?lerp(1.7,1,EASE(tt/0.14)):1;
+  const uH=H-Math.max(0,config.bottomPad||0);
+  if(cx==null){cx=W/2;cy=uH/2;maxW=980;maxH=620;}
+  const k=Math.min(maxW/img.width,maxH/img.height,3);
+  const w=img.width*k,h=img.height*k;
+  ctx.save();ctx.globalAlpha=a;
+  ctx.translate(cx,cy);ctx.scale(sc,sc);
+  ctx.shadowColor='rgba(0,0,0,.6)';ctx.shadowBlur=26;ctx.shadowOffsetY=6;
+  ctx.drawImage(img,-w/2,-h/2,w,h);
+  ctx.restore();
+}
+function autoLogo(step,tt,base){
+  const type=step.type, d=step.data||{};
+  const key=SE_OF[type]||type;
+  const id=logoMap[key];
+  if(id==null)return;
+  const lg=logoList.find(l=>l.id===id);
+  if(!lg)return;
+  const pos=logoPosFor(d,base);
+  drawLogoPop(lg.img,tt,pos.cx,pos.cy,pos.maxW,pos.maxH);
+}
+function logoPosFor(d,base){
+  const pi=d.p!=null?d.p:(d.tp!=null?d.tp:(d.a&&d.a.p!=null?d.a.p:null));
+  if(pi!=null&&pi<config.num&&base){
+    const L=computeLayout(base);
+    const r=L.players[pi].rect;
+    return {cx:r.x+r.w/2,cy:r.y+r.h/2,maxW:r.w*0.88,maxH:r.h*0.88};
+  }
+  return {cx:null,cy:null,maxW:980,maxH:620};
+}
+function bigTextAt(text,x,y,t){
+  const a=t<0.15?t/0.15:(t>0.85?(1-t)/0.15:1);
+  ctx.save();ctx.globalAlpha=a;
+  ctx.font='900 56px '+FONTF;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.shadowColor='#f0c33c';ctx.shadowBlur=24;ctx.fillStyle='#fff';
+  ctx.fillText(text,x,y);ctx.restore();
+}
+let layoutCache=null;
+function computeLayoutFor(st){return computeLayout(st);}
+
+/* ---------- 再生 ---------- */
+let audioCtx=null;
+function getAC(){if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume();return audioCtx;}
+let exportDest=null;
+function playSE(type){
+  const id=seMap[type];if(id==null)return;
+  const se=seList.find(s=>s.id===id);if(!se||!se.buffer)return;
+  const ac=getAC();
+  const src=ac.createBufferSource();src.buffer=se.buffer;
+  src.connect(ac.destination);
+  if(exportDest)src.connect(exportDest);
+  src.start();
+}
+const SE_OF={draw:'draw',charge:'charge',summon:'summon',revive:'summon',spell:'spell',attack:'attack',block:'block',
+  destroy:'destroy',break:'break',trigger:'trigger',bounce:'bounce',tomana:'bounce',toshield:'bounce',recover:'draw',
+  addshield:'charge',psummon:'psummon',preturn:'bounce',telop:'telop',cutin:'cutin',turn:'turn',lose:'lose',msummon:'summon',mdestroy:'destroy',mbounce:'bounce',mshow:'charge',swap:'summon',mtap:'charge',ability:'ability',target:'target',meteor:'destroy',sbounce:'bounce',evolve:'summon',devolve:'destroy',discard:'bounce',todeck:'bounce',exile:'destroy',mtodeck:'bounce',smana:'charge',stodeck:'bounce'};
+
+function playStepAnim(step,pre,post,speed){
+  return new Promise(res=>{
+    const anim=makeAnim(step,pre,post);
+    const dur=(DUR[step.type]||0.8)/speed*1000;
+    const se=SE_OF[step.type];
+    const seAt=anim.seAt!=null?anim.seAt:0;
+    let seDone=!se;
+    if(se&&seAt<=0){playSE(se);seDone=true;}
+    const t0=performance.now();
+    function frame(now){
+      if(stopFlag){res();return;}
+      const tt=Math.min(1,(now-t0)/dur);
+      if(!seDone&&tt>=seAt){playSE(se);seDone=true;}
+      render(anim.base,{hide:anim.hide});
+      anim.draw(tt);
+      if(step.type!=='logo')autoLogo(step,tt,anim.base);
+      if(tt<1)requestAnimationFrame(frame);else res();
+    }
+    requestAnimationFrame(frame);
+  });
+}
+const STAGGER={draw:130}; // 連続時に少しずつずらす手順(ms) タタタッというリズム
+function playGroupAnim(group,pre,post,speed){
+  return new Promise(res=>{
+    const anims=group.map(st=>makeAnim(st,pre,post));
+    // hideを統合
+    const hide={uids:[],shields:[]};
+    anims.forEach(a=>{
+      if(a.hide){
+        if(a.hide.uid!=null)hide.uids.push(a.hide.uid);
+        if(a.hide.shield)hide.shields.push(a.hide.shield);
+        if(a.hide.partner!=null)hide.partner=a.hide.partner;
+      }
+    });
+    const base=anims[0].base;
+    const dur=(DUR[group[0].type]||0.8)/speed*1000;
+    const stg=(STAGGER[group[0].type]||0)/speed;
+    const offs=anims.map((_,i)=>i*stg);
+    const total=dur+offs[offs.length-1];
+    const se=SE_OF[group[0].type];
+    const seAts=anims.map(a=>a.seAt!=null?a.seAt:0);
+    const seDone=anims.map((_,i)=>!se||(stg===0&&i>0));
+    const t0=performance.now();
+    function frame(now){
+      if(stopFlag){res();return;}
+      const el=now-t0;
+      render(base,{hide});
+      anims.forEach((a,i)=>{
+        if(el<offs[i])return;
+        const tt=Math.min(1,(el-offs[i])/dur);
+        if(!seDone[i]&&tt>=seAts[i]){playSE(se);seDone[i]=true;}
+        a.draw(tt);
+      });
+      autoLogo(group[0],Math.min(1,el/total),base);
+      if(el<total)requestAnimationFrame(frame);else res();
+    }
+    requestAnimationFrame(frame);
+  });
+}
+async function playAll(fromIdx,speed){
+  playing=true;stopFlag=false;
+  $('#btnPlay').disabled=true;$('#btnStop').disabled=false;
+  let pre=initState();
+  for(let i=0;i<fromIdx;i++)applyStep(pre,steps[i]);
+  render(pre);
+  await new Promise(r=>setTimeout(r,400/speed));
+  const SIMUL=new Set(['draw','break','destroy','bounce','tomana','toshield','todeck','addshield','trigger','shieldburn','sbounce','tapToggle','mtap']);
+  let i=fromIdx;
+  while(i<steps.length){
+    if(stopFlag)break;
+    let j=i+1;
+    if(SIMUL.has(steps[i].type)){
+      while(j<steps.length&&steps[j].type===steps[i].type)j++;
+    }
+    const group=steps.slice(i,j);
+    const post=JSON.parse(JSON.stringify(pre));
+    group.forEach(st=>applyStep(post,st));
+    cursor=j;updateStepUI();
+    if(group.length===1){
+      await playStepAnim(group[0],pre,post,speed);
+    }else{
+      await playGroupAnim(group,pre,post,speed);
+    }
+    pre=post;
+    render(pre);
+    await new Promise(r=>setTimeout(r,420/speed));
+    i=j;
+  }
+  state=pre;cursor=Math.min(cursor,steps.length);
+  playing=false;
+  $('#btnPlay').disabled=false;$('#btnStop').disabled=true;
+  buildTo(steps.length);
+}
+
+/* ---------- 手順の追加 ---------- */
+function stepLabel(s){
+  const d=s.data||{};
+  const pn=i=>config.players[i]?config.players[i].name.replace('PLAYER ','P'):'';
+  const nm=c=>cardName(c)?`《${cardName(c)}》`:'';
+  switch(s.type){
+    case 'turn':return `— ${pn(d.p)} ターン開始 —`;
+    case 'draw':return `${pn(d.p)} ドロー`;
+    case 'charge':return `${pn(d.p)} マナチャージ${nm(d.card)}${d.fromDeck?'（山札から）':''}`;
+    case 'spend':return `${pn(d.p)} マナ${d.n}支払い`;
+    case 'summon':return `${pn(d.p)} 召喚${nm(d.card)}`;
+    case 'spell':return `${pn(d.p)} 呪文${nm(d.card)}`;
+    case 'attack':return `${pn(d.p)} 攻撃 → ${pn(d.target.tp)}${d.target.kind==='creature'?'のクリーチャー':''}`;
+    case 'block':return `${pn(d.p)} ブロック`;
+    case 'destroy':return `${pn(d.tp)}のクリーチャー破壊`;
+    case 'bounce':return `${pn(d.tp)}のクリーチャー→手札`;
+    case 'tomana':return `${pn(d.tp)}のクリーチャー→マナ`;
+    case 'toshield':return `${pn(d.tp)}のクリーチャー→盾`;
+    case 'tapToggle':return `${pn(d.tp)} タップ/アンタップ`;
+    case 'break':return `${pn(d.tp)}の盾ブレイク`;
+    case 'trigger':return `${pn(d.tp)} S・トリガー${nm(d.card)}`;
+    case 'addshield':return `${pn(d.p)} 盾追加${d.fromHand?'（手札から）':''}`;
+    case 'revive':return `${pn(d.p)} 蘇生${nm(d.card)}`;
+    case 'recover':return `${pn(d.p)} 回収${nm(d.card)}`;
+    case 'psummon':return `${pn(d.p)} パートナー召喚`;
+    case 'preturn':return `${pn(d.p)} パートナー帰還`;
+    case 'pfaceup':return `${pn(d.p)} パートナー表向き`;
+    case 'setpartner':return `${pn(d.p)} P.カード設定${nm(d.card)}`;
+    case 'telop':return `テロップ「${d.text}」(旧)`;
+    case 'logo':{const lg=logoList.find(l=>l.id===d.logo);return `ロゴ表示${lg?`《${lg.name}》`:''}`;}
+    case 'cutin':return `カットイン${nm(d.card)}`;
+    case 'lose':return `${pn(d.p)} 敗北`;
+    case 'msummon':return `${pn(d.p)} マナから召喚${nm(d.card)}`;
+    case 'mdestroy':return `${pn(d.p)} マナ破壊`;
+    case 'mbounce':return `${pn(d.p)} マナ→手札`;
+    case 'mshow':return `${pn(d.p)} マナゾーン表示`;
+    case 'mtap':return `${pn(d.p)} マナをタップ/戻す`;
+    case 'ability':return `${pn(d.tp)} 効果発動`;
+    case 'target':return `${pn(d.tp)}${d.kind==='shield'?'の盾':d.kind==='panel'?'本体':d.kind==='partner'?'のパートナー':'のクリーチャー'}を対象指定`;
+    case 'sbounce':return `${pn(d.tp)}の盾→手札`;
+    case 'todeck':return `${pn(d.tp)}のクリーチャー→山札`;
+    case 'exile':return `${pn(d.tp)}のクリーチャー除外`;
+    case 'mtodeck':return `${pn(d.p)} マナ→山札`;
+    case 'smana':return `${pn(d.tp)}の盾→マナ`;
+    case 'stodeck':return `${pn(d.tp)}の盾→山札`;
+    case 'evolve':return `${pn(d.tp)} 進化${nm(d.card)}`;
+    case 'devolve':return `${pn(d.tp)} 退化`;
+    case 'meteor':return `${pn(d.tp)} メテオバーン`;
+    case 'discard':return `${pn(d.p)} 墓地へ${nm(d.card)}${d.fromHand?'（手札から）':d.fromDeck?'（山札から）':''}`;
+    case 'swap':return d.mode==='bb'?`入れ替え（場↔場）`:d.mode==='bm'?`${pn(d.a.p)} Jチェンジ（場↔マナ）`:`${pn(d.a.p)} チェンジ（場↔手札）${nm(d.card)}`;
+    case 'adjust':return `${pn(d.p)} 数値調整`;
+    case 'wait':return `（間）`;
+    default:return s.type;
+  }
+}
+async function addStep(type,data){
+  const step={type,data};
+  steps.push(step);
+  if(animateOnAdd&&!playing){
+    const pre=JSON.parse(JSON.stringify(state));
+    applyStep(state,step);
+    cursor=steps.length;updateStepUI();
+    stopFlag=false;
+    await playStepAnim(step,pre,state,parseFloat($('#speed').value));
+    render(state);
+  }else{
+    applyStep(state,step);
+    cursor=steps.length;updateStepUI();render(state);
+  }
+}
+function updateStepUI(){
+  $('#stepPos').textContent=`${cursor} / ${steps.length}`;
+  const ol=$('#stepList');ol.innerHTML='';
+  steps.forEach((s,i)=>{
+    const li=document.createElement('li');
+    if(i===cursor-1)li.classList.add('cur');
+    li.innerHTML=`<span class="idx" title="タップで番号指定移動" style="cursor:pointer;text-decoration:underline dotted">${i+1}</span><span class="lbl"></span>`+
+      `<button class="small" title="ここから再生">▶</button>`+
+      `<button class="small" title="上へ" ${i===0?'disabled':''}>↑</button>`+
+      `<button class="small" title="下へ" ${i===steps.length-1?'disabled':''}>↓</button>`+
+      `<button class="small danger" title="削除">×</button>`;
+    li.querySelector('.lbl').textContent=stepLabel(s);
+    const btns=li.querySelectorAll('button');
+    li.querySelector('.idx').onclick=e=>{
+      e.stopPropagation();
+      const v=prompt(`手順${i+1}「${stepLabel(s)}」の移動先番号 (1〜${steps.length})`,i+1);
+      if(v==null)return;
+      let n=parseInt(v,10);
+      if(isNaN(n))return;
+      n=Math.max(1,Math.min(steps.length,n));
+      if(n-1===i)return;
+      const st=steps.splice(i,1)[0];
+      steps.splice(n-1,0,st);
+      buildTo(cursor);
+    };
+    li.onclick=e=>{if(e.target.tagName==='BUTTON'||e.target.classList.contains('idx'))return;buildTo(i+1);};
+    btns[0].onclick=()=>{getAC();stopFlag=true;setTimeout(()=>playAll(i,parseFloat($('#speed').value)),220);};
+    btns[1].onclick=()=>{if(i>0){[steps[i-1],steps[i]]=[steps[i],steps[i-1]];buildTo(cursor);}};
+    btns[2].onclick=()=>{if(i<steps.length-1){[steps[i],steps[i+1]]=[steps[i+1],steps[i]];buildTo(cursor);}};
+    btns[3].onclick=()=>{steps.splice(i,1);buildTo(Math.min(cursor,steps.length));};
+    ol.appendChild(li);
+  });
+}
+
+/* ---------- 対象選択モード ---------- */
+function setHint(t,active){
+  const h=$('#hintBar');h.textContent=t;
+  h.classList.toggle('idle',!active);
+}
+function cancelMode(){mode=null;setHint('操作パネルからアクションを選択（対象が必要な操作は盤面をタップして指定）',false);}
+function enterMode(m,hint){mode=m;setHint(hint+'　（Escまたはここをタップで中止）',true);}
+$('#hintBar').onclick=()=>{if(mode)cancelMode();};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')cancelMode();});
+
+canvas.addEventListener('click',e=>{
+  const r=canvas.getBoundingClientRect();
+  const x=(e.clientX-r.left)*canvas.width/r.width;
+  const y=(e.clientY-r.top)*canvas.height/r.height;
+  const hits=hitRects.filter(h=>x>=h.rect.x&&x<=h.rect.x+h.rect.w&&y>=h.rect.y&&y<=h.rect.y+h.rect.h);
+  const top=k=>hits.filter(h=>h.kind===k).pop();
+  if(!mode){
+    const pnl=top('panel');
+    if(pnl){selPlayer=pnl.p;refreshPlayerTabs();}
+    return;
+  }
+  const m=mode;
+  const cr=top('creature'),sh=top('shield'),pnl=top('panel'),ptr=top('partner');
+  switch(m.op){
+    case 'attack':
+      if(m.stage===1){
+        if(cr&&cr.p===selPlayer){m.uid=cr.uid;m.stage=2;
+          enterMode(m,'攻撃対象をタップ：相手プレイヤー（パネル/盾）または相手クリーチャー');}
+      }else{
+        if(cr&&cr.p!==selPlayer){cancelMode();addStep('attack',{p:selPlayer,uid:m.uid,target:{kind:'creature',tp:cr.p,uid:cr.uid}});}
+        else if(sh&&sh.p!==selPlayer){cancelMode();addStep('attack',{p:selPlayer,uid:m.uid,target:{kind:'shield',tp:sh.p,idx:sh.idx}});}
+        else if(pnl&&pnl.p!==selPlayer){cancelMode();addStep('attack',{p:selPlayer,uid:m.uid,target:{kind:'player',tp:pnl.p}});}
+      }
+      break;
+    case 'block':
+      if(cr&&cr.p===selPlayer){cancelMode();addStep('block',{p:selPlayer,uid:cr.uid});}
+      break;
+    case 'ability':
+      if(cr){cancelMode();addStep('ability',{tp:cr.p,uid:cr.uid});}
+      else if(ptr){cancelMode();addStep('ability',{tp:ptr.p,kind:'partner'});}
+      break;
+    case 'target':
+      if(cr){cancelMode();addStep('target',{tp:cr.p,kind:'creature',uid:cr.uid});}
+      else if(sh){cancelMode();addStep('target',{tp:sh.p,kind:'shield',idx:sh.idx});}
+      else if(ptr){cancelMode();addStep('target',{tp:ptr.p,kind:'partner'});}
+      else if(pnl){cancelMode();addStep('target',{tp:pnl.p,kind:'panel'});}
+      break;
+    case 'evolve':
+      if(cr){const tgt={tp:cr.p,uid:cr.uid};cancelMode();
+        (async()=>{
+          const c=await pickCard('進化先のカードを選択（手札から重ねる）',true);
+          if(c===undefined)return;
+          addStep('evolve',{tp:tgt.tp,uid:tgt.uid,card:c});
+        })();}
+      break;
+    case 'devolve':
+      if(cr){
+        const it=P(state,cr.p).battle.find(b=>b.uid===cr.uid);
+        if(!it||!it.under||!it.under.length){alert('このクリーチャーの下にカードがありません（先に「進化」で重ねてください）');break;}
+        cancelMode();addStep('devolve',{tp:cr.p,uid:cr.uid});}
+      break;
+    case 'meteor':
+      if(cr){
+        const it=P(state,cr.p).battle.find(b=>b.uid===cr.uid);
+        if(!it||!it.under||!it.under.length){alert('このクリーチャーの下にカードがありません');break;}
+        cancelMode();addStep('meteor',{tp:cr.p,uid:cr.uid});}
+      break;
+    case 'swap':
+      if(m.stage===1){
+        if(cr){m.a={p:cr.p,uid:cr.uid};m.stage=2;
+          enterMode(m,'入れ替え先: 場のクリーチャーをタップ / 自分のパネルをタップで手札・マナと入れ替え');}
+      }else{
+        if(cr&&!(cr.p===m.a.p&&cr.uid===m.a.uid)){
+          cancelMode();addStep('swap',{mode:'bb',a:m.a,b:{p:cr.p,uid:cr.uid}});
+        }else if(pnl){
+          const aSel=m.a;cancelMode();
+          (async()=>{
+            const choice=await pickChoice('入れ替え先を選択',[['h','手札のカードと（革命チェンジ等）'],['m','マナのカードと（Jチェンジ等）']]);
+            if(!choice)return;
+            if(choice==='m'){
+              const pz=P(state,aSel.p).manaZ;
+              if(!pz.length){alert('マナゾーンにカードがありません');return;}
+              const r=await pickManaCard('入れ替えるマナのカードを選択',aSel.p);
+              if(r==null)return;
+              addStep('swap',{mode:'bm',a:aSel,b:{mi:r.mi},newUid:uidSeq++});
+            }else{
+              const c=await pickCard('場に出すカードを選択（手札から）',true);
+              if(c===undefined)return;
+              addStep('swap',{mode:'bh',a:aSel,card:c,newUid:uidSeq++});
+            }
+          })();
+        }
+      }
+      break;
+    case 'cremove':
+      if(cr){const tgt={tp:cr.p,uid:cr.uid};cancelMode();
+        (async()=>{
+          const dst=await pickChoice('除去方法を選択',[
+            ['destroy','破壊（→墓地・砕け散り）'],
+            ['bounce','バウンス（→手札・砕け散り）'],
+            ['tomana','マナ送り'],
+            ['todeck','山札送り'],
+            ['toshield','シールド送り'],
+            ['exile','除外（ゲーム外へ）']]);
+          if(!dst)return;
+          addStep(dst,{tp:tgt.tp,uid:tgt.uid});
+        })();}
+      break;
+    case 'tapToggle':
+      if(cr){cancelMode();addStep('tapToggle',{tp:cr.p,uid:cr.uid});}
+      else if(top('mana')){const mh=top('mana');cancelMode();addStep('mtap',{p:mh.p,mi:mh.mi});}
+      else if(pnl){const pp=pnl.p;cancelMode();
+        (async()=>{
+          if(!P(state,pp).manaZ.length){alert('マナゾーンにカードがありません');return;}
+          const r=await pickManaCard('タップ/戻すマナのカードを選択',pp);
+          if(r==null)return;
+          addStep('mtap',{p:pp,mi:r.mi});
+        })();}
+      break;
+    case 'break':
+      if(sh){cancelMode();addStep('break',{tp:sh.p,idx:sh.idx});}
+      break;
+    case 'sremove':
+      if(sh){const tgt={tp:sh.p,idx:sh.idx};cancelMode();
+        (async()=>{
+          const dst=await pickChoice('シールドの行き先を選択',[
+            ['shieldburn','→墓地（焼却・砕け散り）'],
+            ['sbounce','→手札'],
+            ['smana','→マナ'],
+            ['stodeck','→山札']]);
+          if(!dst)return;
+          addStep(dst,{tp:tgt.tp,idx:tgt.idx});
+        })();}
+      break;
+    case 'trigger':
+      if(sh){const tp=sh.p,idx=sh.idx;cancelMode();
+        pickCard('トリガーで公開するカードを選択',true).then(card=>{
+          if(card===undefined)return;
+          addStep('trigger',{tp,idx,card});
+        });}
+      break;
+  }
+});
+
+/* ---------- モーダル ---------- */
+function openM(id){$(id).classList.add('on');}
+function closeM(id){$(id).classList.remove('on');}
+function pickCard(title,allowNone,fromList){
+  return new Promise(res=>{
+    $('#mPickTitle').textContent=title;
+    const grid=$('#mPickGrid');grid.innerHTML='';
+    const list=fromList||assets.map(a=>({a:a.id,name:a.name}));
+    list.forEach((c,i)=>{
+      const div=document.createElement('div');div.className='card';
+      const img=cardImg(c);
+      if(img){const im=document.createElement('img');im.src=img.src;div.appendChild(im);}
+      const cap=document.createElement('div');cap.className='cap';cap.textContent=cardName(c)||'(名称なし)';div.appendChild(cap);
+      div.onclick=()=>{closeM('#mPick');res(fromList?{card:c,idx:i}:c);};
+      grid.appendChild(div);
+    });
+    if(!list.length){grid.innerHTML='<p class="note" style="grid-column:1/-1">カードがありません。「カード」タブから画像を追加するか、簡易カードを作成してください。</p>';}
+    $('#mPickNone').style.display=allowNone?'':'none';
+    $('#mPickNone').onclick=()=>{closeM('#mPick');res(null);};
+    $('#mPickCancel').onclick=()=>{closeM('#mPick');res(undefined);};
+    openM('#mPick');
+  });
+}
+function pickLogo(title){
+  return new Promise(res=>{
+    $('#mPickTitle').textContent=title;
+    const grid=$('#mPickGrid');grid.innerHTML='';
+    logoList.forEach(l=>{
+      const div=document.createElement('div');div.className='card';
+      const im=document.createElement('img');im.src=l.dataURL;im.style.objectFit='contain';div.appendChild(im);
+      const cap=document.createElement('div');cap.className='cap';cap.textContent=l.name;div.appendChild(cap);
+      div.onclick=()=>{closeM('#mPick');res(l);};
+      grid.appendChild(div);
+    });
+    if(!logoList.length){grid.innerHTML='<p class="note" style="grid-column:1/-1">ロゴ画像がありません。SEタブから追加してください。</p>';}
+    $('#mPickNone').style.display='none';
+    $('#mPickCancel').onclick=()=>{closeM('#mPick');res(undefined);};
+    openM('#mPick');
+  });
+}
+function pickManaCard(title,pIdx){
+  return new Promise(res=>{
+    $('#mPickTitle').textContent=title;
+    const grid=$('#mPickGrid');grid.innerHTML='';
+    const pz=P(state,pIdx).manaZ;
+    pz.forEach((c,i)=>{
+      const div=document.createElement('div');div.className='card';
+      const img=cardImg(c.card);
+      if(img){const im=document.createElement('img');im.src=img.src;div.appendChild(im);}
+      const cap=document.createElement('div');cap.className='cap';
+      cap.textContent=(cardName(c.card)||'(不明カード)')+(c.tapped?'（タップ）':'');
+      div.appendChild(cap);
+      div.onclick=()=>{closeM('#mPick');res({mi:i,card:c.card});};
+      grid.appendChild(div);
+    });
+    if(!pz.length){grid.innerHTML='<p class="note" style="grid-column:1/-1">マナゾーンが空です。</p>';}
+    $('#mPickNone').style.display='none';
+    $('#mPickCancel').onclick=()=>{closeM('#mPick');res(undefined);};
+    openM('#mPick');
+  });
+}
+function pickOpts(title,options){
+  // options: [[key,label,default],...] → {key:bool,...} / undefined=キャンセル
+  return new Promise(res=>{
+    $('#mPickTitle').textContent=title;
+    const grid=$('#mPickGrid');grid.innerHTML='';
+    const vals={};
+    options.forEach(([key,label,def])=>{
+      vals[key]=!!def;
+      const b=document.createElement('button');
+      b.className='fileBtn';b.style.gridColumn='1/-1';
+      const upd=()=>{b.textContent=(vals[key]?'☑ ':'☐ ')+label;b.style.outline=vals[key]?'2px solid var(--gold)':'none';};
+      upd();
+      b.onclick=()=>{vals[key]=!vals[key];upd();};
+      grid.appendChild(b);
+    });
+    const ok=document.createElement('button');
+    ok.className='fileBtn';ok.style.gridColumn='1/-1';ok.style.background='var(--gold)';ok.style.color='#111';
+    ok.textContent='決定';
+    ok.onclick=()=>{closeM('#mPick');res(vals);};
+    grid.appendChild(ok);
+    $('#mPickNone').style.display='none';
+    $('#mPickCancel').onclick=()=>{closeM('#mPick');res(undefined);};
+    openM('#mPick');
+  });
+}
+function pickChoice(title,options){
+  return new Promise(res=>{
+    $('#mPickTitle').textContent=title;
+    const grid=$('#mPickGrid');grid.innerHTML='';
+    options.forEach(([val,label])=>{
+      const b=document.createElement('button');
+      b.textContent=label;b.className='fileBtn';
+      b.style.gridColumn='1/-1';
+      b.onclick=()=>{closeM('#mPick');res(val);};
+      grid.appendChild(b);
+    });
+    $('#mPickNone').style.display='none';
+    $('#mPickCancel').onclick=()=>{closeM('#mPick');res(undefined);};
+    openM('#mPick');
+  });
+}
+function pickManaMulti(title,pIdx){
+  return new Promise(res=>{
+    $('#mPickTitle').textContent=title;
+    const grid=$('#mPickGrid');grid.innerHTML='';
+    const pz=P(state,pIdx).manaZ; const sel=new Set();
+    const noneBtn=$('#mPickNone');
+    const restore=()=>{noneBtn.textContent='画像なし（裏面/汎用）';};
+    pz.forEach((c,i)=>{
+      const div=document.createElement('div');div.className='card';
+      if(c.tapped)div.style.opacity=0.35;
+      const img=cardImg(c.card);
+      if(img){const im=document.createElement('img');im.src=img.src;div.appendChild(im);}
+      const cap=document.createElement('div');cap.className='cap';
+      cap.textContent=(cardName(c.card)||'(不明)')+(c.tapped?'（タップ済）':'');div.appendChild(cap);
+      div.onclick=()=>{
+        if(c.tapped)return;
+        if(sel.has(i)){sel.delete(i);div.classList.remove('sel');}
+        else{sel.add(i);div.classList.add('sel');}
+        noneBtn.textContent=`決定（${sel.size}枚タップ）`;
+      };
+      grid.appendChild(div);
+    });
+    if(!pz.length){grid.innerHTML='<p class="note" style="grid-column:1/-1">マナゾーンが空です。</p>';}
+    noneBtn.style.display='';noneBtn.textContent='決定（0枚タップ）';
+    noneBtn.onclick=()=>{closeM('#mPick');restore();res([...sel].sort((a,b)=>a-b));};
+    $('#mPickCancel').onclick=()=>{closeM('#mPick');restore();res(undefined);};
+    openM('#mPick');
+  });
+}
+function askText(title,label,def,extra){
+  return new Promise(res=>{
+    $('#mTextTitle').textContent=title;$('#mTextLabel').textContent=label;
+    $('#mTextInput').value=def||'';
+    $('#mTextRow2').style.display=extra?'':'none';
+    if(extra){$('#mTextLabel2').textContent=extra.label;$('#mTextInput2').value=extra.def;}
+    $('#mTextOk').onclick=()=>{closeM('#mText');res({text:$('#mTextInput').value,n:parseInt($('#mTextInput2').value)||0});};
+    $('#mTextCancel').onclick=()=>{closeM('#mText');res(undefined);};
+    openM('#mText');
+    setTimeout(()=>$('#mTextInput').focus(),50);
+  });
+}
+
+/* ---------- 操作ボタン ---------- */
+$$('.opGrid button').forEach(b=>{
+  b.onclick=async ()=>{
+    const op=b.dataset.op;
+    cancelMode();
+    const p=selPlayer;
+    switch(op){
+      case 'turn':addStep('turn',{p});break;
+      case 'draw':addStep('draw',{p});break;
+      case 'charge':{
+        const c=await pickCard('マナチャージするカード（省略可）',true);if(c===undefined)break;
+        const o=await pickOpts('チャージのオプション',[['showZone','マナゾーン枠を表示',true],['tapped','タップイン',false],['fromDeck','山札からチャージ（山札-1）',false]]);
+        if(!o)break;
+        addStep('charge',{p,card:c,showZone:o.showZone,tapped:o.tapped,fromDeck:o.fromDeck});break;}
+      case 'summon':{
+        const c=await pickCard('召喚するカードを選択',true);if(c===undefined)break;
+        const o=await pickOpts('召喚のオプション',[['tapped','タップイン',false],['cutin','召喚前にカットイン演出',false]]);
+        if(!o)break;
+        if(o.cutin&&c)await addStep('cutin',{card:c,p});
+        await addStep('summon',{p,card:c,uid:uidSeq++,tapped:o.tapped});break;}
+      case 'spell':{
+        const c=await pickCard('唱える呪文カードを選択',true);if(c===undefined)break;
+        const o=await pickOpts('呪文のオプション',[['cutin','詠唱前にカットイン演出',false]]);
+        if(!o)break;
+        if(o.cutin&&c)await addStep('cutin',{card:c,p});
+        await addStep('spell',{p,card:c});break;}
+      case 'spend':{
+        const pz=P(state,p).manaZ;
+        if(!pz.some(c=>!c.tapped)){alert('タップできるマナがありません');break;}
+        const mis=await pickManaMulti('タップする（支払う）マナを選択',p);
+        if(mis===undefined||!mis.length)break;
+        const o=await pickOpts('マナ支払いのオプション',[['showZone','マナゾーン枠を表示',true]]);
+        if(!o)break;
+        addStep('spend',{p,n:mis.length,mis,showZone:o.showZone});break;}
+      case 'msummon':{
+        const pz=P(state,p).manaZ;
+        if(!pz.length){alert('マナゾーンにカードがありません');break;}
+        const r=await pickManaCard('マナゾーンから召喚するカードを選択',p);
+        if(r==null)break;
+        const o=await pickOpts('マナ召喚のオプション',[['tapped','タップイン',false]]);
+        if(!o)break;
+        addStep('msummon',{p,mi:r.mi,card:r.card,uid:uidSeq++,tapped:o.tapped});break;}
+      case 'mremove':{
+        const pz=P(state,p).manaZ;
+        if(!pz.length){alert('マナゾーンにカードがありません');break;}
+        const r=await pickManaCard('除去するマナを選択',p);
+        if(r==null)break;
+        const dst=await pickChoice('マナの行き先を選択',[['g','→墓地（マナ破壊）'],['h','→手札'],['d','→山札']]);
+        if(!dst)break;
+        const o=await pickOpts('マナ除去のオプション',[['showZone','マナゾーン枠を表示',true]]);
+        if(!o)break;
+        const typ=dst==='g'?'mdestroy':dst==='h'?'mbounce':'mtodeck';
+        addStep(typ,{p,mi:r.mi,showZone:o.showZone});break;}
+      case 'mshow':addStep('mshow',{p});break;
+      case 'attack':enterMode({op,stage:1},'攻撃するクリーチャー（自分の場）をタップ');break;
+      case 'swap':enterMode({op,stage:1},'入れ替える1枚目（場のクリーチャー）をタップ');break;
+      case 'evolve':enterMode({op},'進化させるクリーチャー（進化元）をタップ');break;
+      case 'devolve':enterMode({op},'退化させるクリーチャーをタップ');break;
+      case 'meteor':enterMode({op},'メテオバーンするクリーチャー（進化下のあるもの）をタップ');break;
+      case 'ability':enterMode({op},'効果を発動するクリーチャー（またはパートナー）をタップ');break;
+      case 'target':enterMode({op},'対象を指定: クリーチャー / 盾 / パートナー / プレイヤーパネル');break;
+      case 'discard':{
+        const c=await pickCard('墓地に置くカードを選択',true);if(c===undefined)break;
+        const ch=await pickChoice('どこから送りますか',[['h','手札から捨てる（手札-1）'],['d','山札から捨てる（山札-1）'],['x','墓地のトップだけ更新']]);
+        if(!ch)break;
+        addStep('discard',{p,card:c,fromHand:ch==='h',fromDeck:ch==='d'});break;}
+      case 'block':enterMode({op},'ブロックするクリーチャー（選択中プレイヤーの場）をタップ');break;
+      case 'cremove':enterMode({op},'除去するクリーチャーをタップ（誰の場でも可）');break;
+      case 'tapToggle':enterMode({op},'クリーチャーをタップ／プレイヤーパネルをタップするとマナを選択');break;
+      case 'break':enterMode({op},'ブレイクするシールドをタップ（W・ブレイクは2回実行）');break;
+      case 'sremove':enterMode({op},'除去するシールドをタップ');break;
+      case 'trigger':enterMode({op},'S・トリガーが出るシールドをタップ');break;
+      case 'addshield':{
+        const src=await pickChoice('盾追加の元を選択',[['d','山札から（山札-1）'],['h','手札から（手札-1）']]);
+        if(!src)break;
+        addStep('addshield',{p,fromHand:src==='h'});break;}
+      case 'revive':{
+        const gr=P(state,p).grave.filter(c=>c);
+        const raw=P(state,p).grave;
+        const list=raw.map((c,i)=>({c,i})).filter(x=>true);
+        const r=await pickCard('蘇生するカードを墓地から選択',false,raw.map(c=>c||{name:'(不明カード)'}));
+        if(r===undefined||r===null)break;
+        addStep('revive',{p,gi:r.idx,card:raw[r.idx],uid:uidSeq++});break;}
+      case 'recover':{
+        const raw=P(state,p).grave;
+        const r=await pickCard('回収するカードを墓地から選択',false,raw.map(c=>c||{name:'(不明カード)'}));
+        if(r===undefined||r===null)break;
+        addStep('recover',{p,gi:r.idx,card:raw[r.idx]});break;}
+      case 'psummon':{
+        if(!P(state,p).partner.card){const c=await pickCard('パートナーカードを設定',true);if(c===undefined)break;
+          if(c!==null)steps.push({type:'setpartner',data:{p,card:c}});applyStep(state,steps[steps.length-1]||{type:'wait',data:{}});}
+        if(P(state,p).partner.status!=='zone'){alert('パートナーがパートナーゾーンにいません');break;}
+        addStep('psummon',{p,uid:uidSeq++});break;}
+      case 'preturn':addStep('preturn',{p});break;
+      case 'pfaceup':addStep('pfaceup',{p});break;
+      case 'setpartner':{const c=await pickCard('パートナーカードを選択',true);if(c===undefined)break;addStep('setpartner',{p,card:c});break;}
+      case 'logo':{
+        if(!logoList.length){alert('先にSEタブで「ロゴ・エフェクト画像」を追加してください');break;}
+        const lg=await pickLogo('表示するロゴを選択');if(!lg)break;
+        addStep('logo',{logo:lg.id,p:selPlayer});break;}
+      case 'cutin':{const c=await pickCard('カットインで見せるカードを選択',true);if(c===undefined)break;
+        const r=await askText('カットイン','表示テキスト（省略可）','');if(r===undefined)break;
+        addStep('cutin',{card:c,text:r.text});break;}
+      case 'lose':addStep('lose',{p});break;
+      case 'wait':addStep('wait',{});break;
+      case 'adjust':{
+        const pl=P(state,p);
+        $('#adjDeck').value=pl.deck;$('#adjHand').value=pl.hand;
+        $('#adjMana').value=pl.mana.total;$('#adjManaT').value=pl.mana.tapped;
+        openM('#mAdj');
+        $('#adjOk').onclick=()=>{closeM('#mAdj');
+          addStep('adjust',{p,deck:+$('#adjDeck').value,hand:+$('#adjHand').value,mana:+$('#adjMana').value,manaT:+$('#adjManaT').value});};
+        $('#adjCancel').onclick=()=>closeM('#mAdj');
+        break;}
+    }
+  };
+});
+
+/* ---------- プレイヤータブ・設定 ---------- */
+function refreshPlayerTabs(){
+  const box=$('#playerTabs');box.innerHTML='';
+  for(let i=0;i<config.num;i++){
+    const b=document.createElement('button');
+    b.textContent=config.players[i].name.replace('PLAYER ','P');
+    b.style.color=civMain(config.players[i]);
+    if(i===selPlayer)b.classList.add('on');
+    b.onclick=()=>{selPlayer=i;refreshPlayerTabs();};
+    box.appendChild(b);
+  }
+}
+function refreshPlayerConf(){
+  const box=$('#playerConf');box.innerHTML='';
+  for(let i=0;i<config.num;i++){
+    const pl=config.players[i];
+    if(!Array.isArray(pl.civs)||!pl.civs.length)pl.civs=civsOf(pl);
+    if(!pl.mat)pl.mat=['#3a1712','#122c48','#143a20','#281743'][i]||'#16222e';
+    const row=document.createElement('div');row.className='formRow';
+    row.innerHTML=`<label>P${i+1} 名前</label><input type="text" value="">`;
+    const inp=row.querySelector('input');
+    inp.value=pl.name;
+    inp.oninput=()=>{pl.name=inp.value;refreshPlayerTabs();render(state);};
+    box.appendChild(row);
+    // プレイマット色（16進数）
+    const mrow=document.createElement('div');mrow.className='formRow';
+    mrow.innerHTML=`<label>マット色</label><input type="color"><input type="text" style="width:76px" maxlength="7">`;
+    const cpick=mrow.querySelector('input[type=color]'),ctext=mrow.querySelector('input[type=text]');
+    cpick.value=pl.mat;ctext.value=pl.mat;
+    cpick.oninput=()=>{pl.mat=cpick.value;ctext.value=cpick.value;render(state);};
+    ctext.oninput=()=>{if(/^#[0-9a-fA-F]{6}$/.test(ctext.value)){pl.mat=ctext.value;cpick.value=ctext.value;render(state);}};
+    box.appendChild(mrow);
+    // マット不透明度
+    if(pl.matA==null)pl.matA=0.95;
+    const arow=document.createElement('div');arow.className='formRow';
+    arow.innerHTML=`<label>不透明度</label><input type="range" min="0" max="100" step="1" style="flex:1"><span style="width:42px;text-align:right;font-size:12px;color:var(--dim)"></span>`;
+    const rng=arow.querySelector('input'),lbl=arow.querySelector('span');
+    rng.value=Math.round(pl.matA*100);lbl.textContent=Math.round(pl.matA*100)+'%';
+    rng.oninput=()=>{pl.matA=rng.value/100;lbl.textContent=rng.value+'%';render(state);};
+    box.appendChild(arow);
+    // 文明トグル（複数選択可・最低1つ）
+    const cr=document.createElement('div');cr.className='civRow';
+    CIVLIST.forEach(c=>{
+      const b=document.createElement('button');
+      b.textContent=CIVNAME[c];
+      b.style.background=CIVCOL[c]+'44';
+      b.classList.toggle('on',pl.civs.includes(c));
+      b.onclick=()=>{
+        if(pl.civs.includes(c)){
+          if(pl.civs.length<=1)return; // 最低1文明
+          pl.civs=pl.civs.filter(x=>x!==c);
+        }else pl.civs=CIVLIST.filter(x=>pl.civs.includes(x)||x===c);
+        b.classList.toggle('on',pl.civs.includes(c));
+        refreshPlayerTabs();render(state);
+      };
+      cr.appendChild(b);
+    });
+    box.appendChild(cr);
+  }
+}
+function applyGameConf(){
+  const prevNum=config.num;
+  config.num=+$('#confNum').value;
+  // 2人(通常デュエマ)切替時は標準値を提案入力
+  if(config.num===2&&prevNum!==2){
+    $('#confShields').value=5;$('#confHand').value=5;$('#confDeck').value=30;$('#confPartner').checked=false;
+  }else if(config.num!==2&&prevNum===2){
+    $('#confShields').value=6;$('#confHand').value=6;$('#confDeck').value=47;$('#confPartner').checked=true;
+  }
+  config.manaRow=$('#confManaRow').checked;
+  config.showPartner=$('#confPartner').checked;
+  config.shields=+$('#confShields').value;
+  config.hand=+$('#confHand').value;
+  config.deck=+$('#confDeck').value;
+  config.bottomPad=Math.max(0,+$('#confPad').value||0);
+  while(config.players.length<config.num)config.players.push({name:'PLAYER '+(config.players.length+1),civs:['light']});
+  if(selPlayer>=config.num)selPlayer=0;
+  refreshPlayerTabs();refreshPlayerConf();
+  buildTo(steps.length);
+}
+$('#btnApplyConf').onclick=applyGameConf;
+// 入力した瞬間にライブ反映
+['confNum','confShields','confHand','confDeck','confPad','confManaRow','confPartner'].forEach(id=>{
+  const el=$('#'+id);
+  el.addEventListener('input',applyGameConf);
+  el.addEventListener('change',applyGameConf);
+});
+
+/* ---------- アセット ---------- */
+function refreshAssets(){
+  const g=$('#assetGrid');g.innerHTML='';
+  assets.forEach(a=>{
+    const d=document.createElement('div');d.className='card';
+    d.innerHTML=`<img src="${a.dataURL}"><button class="del">×</button>`;
+    d.title=a.name;
+    d.querySelector('.del').onclick=()=>{assets=assets.filter(x=>x.id!==a.id);refreshAssets();render(state);};
+    g.appendChild(d);
+  });
+}
+function addAssetFromDataURL(name,dataURL){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{const a={id:assetSeq++,name,dataURL,img};assets.push(a);res(a);};
+    img.src=dataURL;
+  });
+}
+function setBackImg(dataURL){
+  return new Promise(res=>{
+    if(!dataURL){backImg=null;refreshBackUI();render(state);res();return;}
+    const img=new Image();
+    img.onload=()=>{backImg={dataURL,img};refreshBackUI();render(state);res();};
+    img.src=dataURL;
+  });
+}
+function refreshBackUI(){
+  const pv=$('#backPreview'),st=$('#backStat'),cl=$('#btnBackClear');
+  if(backImg){pv.src=backImg.dataURL;pv.style.display='block';st.textContent='設定中：全プレイヤーの山札・シールド・裏向きP.カードに適用';cl.style.display='inline-block';}
+  else{pv.style.display='none';st.textContent='（未設定：標準デザインの裏面）';cl.style.display='none';}
+}
+$('#btnBackImg').onclick=()=>$('#fileBackImg').click();
+$('#fileBackImg').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  const url=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(f);});
+  await setBackImg(url);
+  e.target.value='';
+};
+$('#btnBackClear').onclick=()=>setBackImg(null);
+function setBgImg(dataURL){
+  return new Promise(res=>{
+    if(!dataURL){bgImg=null;refreshBgUI();render(state);res();return;}
+    const img=new Image();
+    img.onload=()=>{bgImg={dataURL,img};refreshBgUI();render(state);res();};
+    img.src=dataURL;
+  });
+}
+function refreshBgUI(){
+  const pv=$('#bgPreview'),st=$('#bgStat'),cl=$('#btnBgClear');
+  if(bgImg){pv.src=bgImg.dataURL;pv.style.display='block';st.textContent='設定中：プレイマット(95%不透明)の背後に表示';cl.style.display='inline-block';}
+  else{pv.style.display='none';st.textContent='（未設定：標準グラデーション背景）';cl.style.display='none';}
+}
+$('#btnBgImg').onclick=()=>$('#fileBgImg').click();
+$('#fileBgImg').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  const url=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(f);});
+  await setBgImg(url);
+  e.target.value='';
+};
+$('#btnBgClear').onclick=()=>setBgImg(null);
+(function(){
+  const r=$('#confCutin'),v=$('#confCutinV');
+  const set=()=>{v.textContent=r.value+'%';config.cutinPct=+r.value;render(state);};
+  r.value=config.cutinPct||92;v.textContent=r.value+'%';
+  r.oninput=set;
+})();
+$('#confFont').oninput=()=>{config.font=$('#confFont').value;applyFont(config.font);updateFontPreview();};
+function updateFontPreview(){
+  const pv=$('#fontPreview');if(!pv)return;
+  pv.style.fontFamily=FONTF;
+}
+async function loadCustomFont(name,dataURL){
+  try{
+    const res=await fetch(dataURL);const buf=await res.arrayBuffer();
+    const ff=new FontFace(name,buf);await ff.load();document.fonts.add(ff);
+    customFontData={name,dataURL};
+    $('#fontStat').textContent=`読込済: ${name}`;
+    return true;
+  }catch(e){alert('フォントを読み込めませんでした');return false;}
+}
+$('#btnFontFile').onclick=()=>$('#fileFont').click();
+$('#fileFont').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  const url=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(f);});
+  const name='CustomBoardFont';
+  if(await loadCustomFont(name,url)){
+    config.font=name;$('#confFont').value=name;applyFont(name);updateFontPreview();
+  }
+  e.target.value='';
+};
+$('#btnAddCards').onclick=()=>$('#fileCards').click();
+$('#fileCards').onchange=async e=>{
+  for(const f of e.target.files){
+    const url=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(f);});
+    await addAssetFromDataURL(f.name.replace(/\.[^.]+$/,''),url);
+  }
+  refreshAssets();e.target.value='';
+};
+/* 簡易カード作成 */
+let mkCivs=['fire'];
+$$('#mkCiv button').forEach(b=>b.onclick=()=>{
+  const c=b.dataset.c;
+  if(mkCivs.includes(c)){ if(mkCivs.length>1)mkCivs=mkCivs.filter(x=>x!==c); }
+  else mkCivs=CIVLIST.filter(x=>mkCivs.includes(x)||x===c);
+  $$('#mkCiv button').forEach(x=>x.classList.toggle('on',mkCivs.includes(x.dataset.c)));
+});
+$('#btnMakeCard').onclick=()=>{$$('#mkCiv button').forEach(x=>x.classList.toggle('on',mkCivs.includes(x.dataset.c)));openM('#mMake');};
+$('#mkCancel').onclick=()=>closeM('#mMake');
+$('#mkOk').onclick=async ()=>{
+  const name=$('#mkName').value||'名称未設定',cost=$('#mkCost').value,power=$('#mkPower').value;
+  const cv=document.createElement('canvas');cv.width=252;cv.height=352;
+  const c=cv.getContext('2d');
+  const mkGrad=(alpha)=>{
+    if(mkCivs.length===1)return CIVCOL[mkCivs[0]]+(alpha||'');
+    const g=c.createLinearGradient(0,0,252,352);
+    mkCivs.forEach((cv,i)=>g.addColorStop(i/(mkCivs.length-1),CIVCOL[cv]+(alpha||'')));
+    return g;
+  };
+  const col=mkGrad('');
+  const gd=c.createLinearGradient(0,0,0,352);gd.addColorStop(0,'#1a2029');gd.addColorStop(1,'#0c1016');
+  c.fillStyle=gd;c.fillRect(0,0,252,352);
+  c.strokeStyle=col;c.lineWidth=8;c.strokeRect(6,6,240,340);
+  c.fillStyle=CIVCOL[mkCivs[0]];c.beginPath();c.arc(34,34,22,0,7);c.fill();
+  c.fillStyle='#fff';c.font='900 26px '+FONTF;c.textAlign='center';c.textBaseline='middle';
+  c.fillText(cost,34,35);
+  // イラスト枠
+  c.fillStyle=mkGrad('33');c.fillRect(22,66,208,150);
+  c.strokeStyle=mkGrad('88');c.lineWidth=2;c.strokeRect(22,66,208,150);
+  c.fillStyle=col;c.font=`900 ${mkCivs.length>2?36:mkCivs.length>1?46:60}px ${FONTF}`;
+  c.fillText(mkCivs.map(cv=>CIVNAME[cv]).join('/'),126,141);
+  // 名前
+  c.fillStyle='#fff';c.font='800 22px '+FONTF;
+  const nm=name.length>10?name.slice(0,10)+'…':name;
+  c.fillText(nm,126,244);
+  if(name.length>10){c.font='800 18px '+FONTF;c.fillText(name.slice(10,22),126,270);}
+  if(power){c.fillStyle=col;c.font='900 34px '+FONTF;c.textAlign='left';c.fillText(power,20,322);}
+  else{c.fillStyle='#9fb2c8';c.font='700 20px '+FONTF;c.textAlign='left';c.fillText('呪文',20,322);}
+  await addAssetFromDataURL(name,cv.toDataURL('image/png'));
+  refreshAssets();closeM('#mMake');
+  $('#mkName').value='';
+};
+
+/* ---------- SE ---------- */
+function refreshSe(){
+  $('#seFiles').textContent=seList.length?seList.map(s=>s.name).join(' / '):'（未追加）';
+  const box=$('#seMap');box.innerHTML='';
+  SE_SLOTS.forEach(([k,label])=>{
+    const row=document.createElement('div');row.className='seRow';
+    row.innerHTML=`<span class="nm">${label}</span><select><option value="">なし</option></select><button class="small">♪</button>`;
+    const sel=row.querySelector('select');
+    seList.forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.name;sel.appendChild(o);});
+    sel.value=seMap[k]!=null?seMap[k]:'';
+    sel.onchange=()=>{seMap[k]=sel.value===''?null:+sel.value;};
+    row.querySelector('button').onclick=()=>{const old=exportDest;exportDest=null;playSE(k);exportDest=old;};
+    box.appendChild(row);
+  });
+}
+$('#btnAddSe').onclick=()=>$('#fileSe').click();
+function addLogoFromDataURL(name,dataURL){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{const l={id:logoSeq++,name,dataURL,img};logoList.push(l);res(l);};
+    img.src=dataURL;
+  });
+}
+function refreshLogos(){
+  const g=$('#logoGrid');g.innerHTML='';
+  logoList.forEach(l=>{
+    const d=document.createElement('div');d.className='card';
+    d.innerHTML=`<img src="${l.dataURL}" style="object-fit:contain"><button class="del">×</button>`;
+    d.title=l.name;
+    d.querySelector('.del').onclick=()=>{
+      logoList=logoList.filter(x=>x.id!==l.id);
+      Object.keys(logoMap).forEach(k=>{if(logoMap[k]===l.id)logoMap[k]=null;});
+      refreshLogos();
+    };
+    g.appendChild(d);
+  });
+  const box=$('#logoMapBox');box.innerHTML='';
+  SE_SLOTS.forEach(([k,label])=>{
+    const row=document.createElement('div');row.className='seRow';
+    row.innerHTML=`<span class="nm">${label}</span><select><option value="">なし</option></select>`;
+    const sel=row.querySelector('select');
+    logoList.forEach(l=>{const o=document.createElement('option');o.value=l.id;o.textContent=l.name;sel.appendChild(o);});
+    sel.value=logoMap[k]!=null?logoMap[k]:'';
+    sel.onchange=()=>{logoMap[k]=sel.value===''?null:+sel.value;};
+    box.appendChild(row);
+  });
+}
+$('#btnAddLogo').onclick=()=>$('#fileLogo').click();
+$('#fileLogo').onchange=async e=>{
+  for(const f of e.target.files){
+    const url=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(f);});
+    await addLogoFromDataURL(f.name.replace(/\.[^.]+$/,''),url);
+  }
+  refreshLogos();e.target.value='';
+};
+$('#fileSe').onchange=async e=>{
+  const ac=getAC();
+  for(const f of e.target.files){
+    const buf=await f.arrayBuffer();
+    const dataURL=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(f);});
+    let audio=null;
+    try{ audio=await ac.decodeAudioData(buf.slice(0)); }
+    catch(e1){
+      try{ // 一部ブラウザ向けフォールバック
+        const oac=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(2,44100,44100);
+        audio=await oac.decodeAudioData(buf.slice(0));
+      }catch(e2){ audio=null; }
+    }
+    if(audio){seList.push({id:seSeq++,name:f.name.replace(/\.[^.]+$/,''),dataURL,buffer:audio});}
+    else alert(`${f.name} をデコードできませんでした。\nこのブラウザで確実なのは wav / mp3 / m4a(AAC) です。変換してから追加してください。`);
+  }
+  refreshSe();e.target.value='';
+};
+
+/* ---------- 保存/読込/PNG ---------- */
+let lastExport=null; // {name,blob}
+function download(name,blob){
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+$('#btnSave').onclick=()=>{
+  const proj={v:5,config,steps,uidSeq,seMap,logoMap,
+    font:customFontData,
+    back:backImg?backImg.dataURL:null,
+    bg:bgImg?bgImg.dataURL:null,
+    logos:logoList.map(l=>({id:l.id,name:l.name,dataURL:l.dataURL})),
+    assets:assets.map(a=>({id:a.id,name:a.name,dataURL:a.dataURL})),
+    seList:seList.map(s=>({id:s.id,name:s.name,dataURL:s.dataURL}))};
+  download('duepa_project.json',new Blob([JSON.stringify(proj)],{type:'application/json'}));
+};
+$('#btnLoad').onclick=()=>$('#fileProject').click();
+$('#fileProject').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{ await loadProject(await f.text()); }
+  catch(err){ alert('プロジェクトを読み込めませんでした: '+err.message); }
+  e.target.value='';
+};
+async function loadProject(jsonText){
+  const proj=JSON.parse(jsonText);
+  config=proj.config;steps=proj.steps;uidSeq=proj.uidSeq||1000;seMap=Object.assign(seMap,proj.seMap||{});
+  config.players.forEach((pl,i)=>{
+    if(!Array.isArray(pl.civs)||!pl.civs.length)pl.civs=pl.civ?[pl.civ]:['fire'];
+    delete pl.civ;
+    if(!pl.mat)pl.mat=['#3a1712','#122c48','#143a20','#281743'][i]||'#16222e';
+    if(pl.matA==null)pl.matA=0.95;
+  });
+  if(config.bottomPad==null)config.bottomPad=120;
+  if(config.cutinPct==null)config.cutinPct=92;
+  await setBackImg(proj.back||null);
+  await setBgImg(proj.bg||null);
+  logoList=[];
+  for(const l of proj.logos||[]){await addLogoFromDataURL(l.name,l.dataURL);logoList[logoList.length-1].id=l.id;}
+  logoSeq=Math.max(1,...logoList.map(l=>l.id+1),1);
+  logoMap={};SE_SLOTS.forEach(([k])=>logoMap[k]=null);Object.assign(logoMap,proj.logoMap||{});
+  if(proj.font&&proj.font.dataURL)await loadCustomFont(proj.font.name,proj.font.dataURL);
+  $('#confFont').value=config.font||'';applyFont(config.font||'');updateFontPreview();
+  assets=[];
+  for(const a of proj.assets){await addAssetFromDataURL(a.name,a.dataURL);assets[assets.length-1].id=a.id;}
+  assetSeq=Math.max(1,...assets.map(a=>a.id+1));
+  seList=[];
+  const ac=getAC();
+  for(const s of proj.seList||[]){
+    const res=await fetch(s.dataURL);const buf=await res.arrayBuffer();
+    let audio=null;try{audio=await ac.decodeAudioData(buf);}catch(err){}
+    seList.push({id:s.id,name:s.name,dataURL:s.dataURL,buffer:audio});
+  }
+  seSeq=Math.max(1,...seList.map(s=>s.id+1));
+  $('#confNum').value=config.num;$('#confPad').value=config.bottomPad;
+  $('#confManaRow').checked=!!config.manaRow;$('#confPartner').checked=config.showPartner!==false;
+  $('#confCutin').value=config.cutinPct;$('#confCutinV').textContent=config.cutinPct+'%';
+  $('#confShields').value=config.shields;$('#confHand').value=config.hand;$('#confDeck').value=config.deck;
+  selPlayer=0;refreshPlayerTabs();refreshPlayerConf();refreshAssets();refreshSe();refreshLogos();
+  buildTo(steps.length);
+}
+$('#btnPng').onclick=()=>{
+  render(state);
+  canvas.toBlob(b=>download('board.png',b),'image/png');
+};
+
+/* ---------- 動画書き出し ---------- */
+$('#btnExport').onclick=()=>{
+  $('#exportStat').textContent='';$('#exportProg i').style.width='0%';
+  $('#expFrom').value=1;$('#expFrom').max=Math.max(1,steps.length);
+  $('#expTo').value=steps.length;$('#expTo').max=Math.max(1,steps.length);
+  $('#expDiskNote').textContent=window.showSaveFilePicker
+    ? '長時間でもメモリを使い切らないよう、録画データを直接ファイルへ書き出します（保存先を先に選択します）。書き出し中はタブを切り替えないでください。'
+    : '全手順をリアルタイム再生しながら録画します（SE込み）。書き出し中はタブを切り替えないでください。長時間の書き出しでメモリ不足になる場合は手順の範囲を分けてください。';
+  openM('#mExport');};
+$('#expCancel').onclick=()=>{closeM('#mExport');};
+$('#expStart').onclick=async ()=>{
+  if(!steps.length){alert('手順がありません');return;}
+  const res=+$('#expRes').value;
+  const speed=parseFloat($('#expSpeed').value);
+  const brMbps=+($('#expBr').value||12);
+  let from=Math.max(1,Math.min(steps.length,+$('#expFrom').value||1));
+  let to=Math.max(from,Math.min(steps.length,+$('#expTo').value||steps.length));
+  const fromIdx=from-1, toIdx=to; // [fromIdx, toIdx)
+  const partial=(fromIdx>0||toIdx<steps.length);
+  const baseName='duepa_board'+(partial?`_${from}-${to}`:'');
+  const oldW=canvas.width,oldH=canvas.height;
+  canvas.width=res;canvas.height=res*9/16;
+  const scale=res/W;
+  ctx.setTransform(scale,0,0,scale,0,0);
+  const ac=getAC();
+  try{await ac.resume();}catch(e){}
+  exportDest=ac.createMediaStreamDestination();
+  // 無音でも音声トラックが常にデータを流すよう、極小ゲインの発振器を接続
+  let keepAlive=null;
+  if(ac.state==='running'){
+    keepAlive=ac.createConstantSource?ac.createConstantSource():null;
+    if(keepAlive){const kg=ac.createGain();kg.gain.value=0.0001;keepAlive.connect(kg);kg.connect(exportDest);keepAlive.start();}
+  }
+  const vstream=canvas.captureStream(30);
+  const tracks=[...vstream.getVideoTracks()];
+  if(ac.state==='running')tracks.push(...exportDest.stream.getAudioTracks());
+  const stream=new MediaStream(tracks);
+  // コーデック選択: Chrome等=WebM / iPhone・Safari=MP4(H.264)
+  const cand=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm',
+              'video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4'];
+  let mime=cand.find(m=>{try{return MediaRecorder.isTypeSupported(m);}catch(e){return false;}})||'';
+  const ext=mime.includes('mp4')?'mp4':'webm';
+  const recOpts={videoBitsPerSecond:Math.round(brMbps*1000000*(res>=1920?1:0.5))};
+  if(mime)recOpts.mimeType=mime;
+  const rec=new MediaRecorder(stream,recOpts);
+  // 対応ブラウザではメモリに溜めず直接ファイルへ書き出す（長時間・高画質でも安定）
+  let writer=null, wrote=0;
+  if(window.showSaveFilePicker){
+    try{
+      const fh=await window.showSaveFilePicker({suggestedName:baseName+'.'+ext,
+        types:[{description:'Video',accept:{[mime||('video/'+ext)]:['.'+ext]}}]});
+      writer=await fh.createWritable();
+    }catch(err){ if(err&&err.name==='AbortError'){
+        ctx.setTransform(1,0,0,1,0,0);canvas.width=oldW;canvas.height=oldH;render(state);
+        $('#exportStat').textContent='キャンセルしました。';return; } }
+  }
+  const chunks=[];
+  const queue=[];
+  rec.ondataavailable=e=>{
+    if(!e.data.size)return;
+    if(writer)queue.push(e.data.arrayBuffer().then(b=>writer.write(b)).then(()=>{wrote+=e.data.size;}));
+    else chunks.push(e.data);
+  };
+  const done=new Promise(r=>rec.onstop=r);
+  rec.start(1000);
+  $('#expStart').disabled=true;$('#expShare').style.display='none';lastExport=null;
+  $('#exportStat').textContent='録画中…';
+  // 再生
+  stopFlag=false;
+  let pre=initState();
+  for(let k=0;k<fromIdx;k++)applyStep(pre,steps[k]); // 範囲開始時点の盤面を再現
+  render(pre);
+  await new Promise(r=>setTimeout(r,600));
+  {
+    const SIMUL=new Set(['draw','break','destroy','bounce','tomana','toshield','todeck','addshield','trigger','shieldburn','sbounce','tapToggle','mtap']);
+    let i=fromIdx;
+    while(i<toIdx){
+      if(stopFlag)break;
+      let j=i+1;
+      if(SIMUL.has(steps[i].type)){
+        while(j<toIdx&&steps[j].type===steps[i].type)j++;
+      }
+      const group=steps.slice(i,j);
+      const post=JSON.parse(JSON.stringify(pre));
+      group.forEach(st=>applyStep(post,st));
+      if(group.length===1)await playStepAnim(group[0],pre,post,speed);
+      else await playGroupAnim(group,pre,post,speed);
+      pre=post;render(pre);
+      await new Promise(r=>setTimeout(r,420/speed));
+      $('#exportProg i').style.width=((j-fromIdx)/(toIdx-fromIdx)*100)+'%';
+      i=j;
+    }
+  }
+  await new Promise(r=>setTimeout(r,700));
+  $('#exportProg i').style.width='100%';
+  $('#exportStat').textContent='録画停止中…（この後の変換に少し時間がかかります）';
+  await new Promise(r=>setTimeout(r,30));
+  const tEnc=performance.now();
+  rec.stop();await done;
+  if(keepAlive){try{keepAlive.stop();}catch(e){}}
+  exportDest=null;
+  ctx.setTransform(1,0,0,1,0,0);
+  canvas.width=oldW;canvas.height=oldH;
+  $('#exportStat').textContent='エンコード終了処理…（画面が止まって見えても正常です）';
+  await new Promise(r=>setTimeout(r,30));
+  buildTo(steps.length);
+  $('#exportStat').textContent='ファイルを生成中…';
+  await new Promise(r=>setTimeout(r,30));
+  let mb;
+  if(writer){
+    await Promise.all(queue);
+    await writer.close();
+    mb=(wrote/1048576).toFixed(1);
+  }else{
+    const blob=new Blob(chunks,{type:mime||('video/'+ext)});
+    mb=(blob.size/1048576).toFixed(1);
+    lastExport={name:baseName+'.'+ext,blob};
+    $('#expShare').style.display='';
+    download(baseName+'.'+ext,blob);
+  }
+  const sec=((performance.now()-tEnc)/1000).toFixed(1);
+  $('#exportStat').textContent=`完了！ ${baseName}.${ext}（${mb}MB / 変換 ${sec}秒）を保存しました。`;
+  $('#expStart').disabled=false;
+};
+
+/* ---------- transport ---------- */
+$('#btnPlay').onclick=()=>{getAC();playAll(0,parseFloat($('#speed').value));};
+$('#btnStop').onclick=()=>{stopFlag=true;};
+$('#btnFirst').onclick=()=>buildTo(0);
+$('#btnUndo').onclick=()=>{if(steps.length){steps.pop();buildTo(steps.length);}};
+$('#speed').oninput=e=>$('#speedVal').textContent=parseFloat(e.target.value).toFixed(2).replace(/0$/,'')+'x';
+
+/* ---------- tabs ---------- */
+$$('#tabs button').forEach(b=>b.onclick=()=>{
+  $$('#tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  $$('.tabPage').forEach(pg=>pg.classList.toggle('on',pg.dataset.page===b.dataset.tab));
+});
+
+/* ---------- サンプルカード ---------- */
+async function seedSamples(){
+  const defs=[['ボルシャック・サンプル',6,'6000','fire'],['アクア・サンプル',3,'2000','water'],
+    ['大地のサンプル',5,'5000','nature'],['聖なるサンプル',4,'4500','light'],['深淵のサンプル',7,'9000','dark']];
+  for(const [n,cost,pw,civ] of defs){
+    const cv=document.createElement('canvas');cv.width=252;cv.height=352;
+    const c=cv.getContext('2d');const col=CIVCOL[civ];
+    const gd=c.createLinearGradient(0,0,0,352);gd.addColorStop(0,'#1a2029');gd.addColorStop(1,'#0c1016');
+    c.fillStyle=gd;c.fillRect(0,0,252,352);
+    c.strokeStyle=col;c.lineWidth=8;c.strokeRect(6,6,240,340);
+    c.fillStyle=col;c.beginPath();c.arc(34,34,22,0,7);c.fill();
+    c.fillStyle='#fff';c.font='900 26px '+FONTF;c.textAlign='center';c.textBaseline='middle';c.fillText(cost,34,35);
+    c.fillStyle=col+'33';c.fillRect(22,66,208,150);c.strokeStyle=col+'88';c.strokeRect(22,66,208,150);
+    c.fillStyle=col;c.font='900 60px '+FONTF;c.fillText(CIVNAME[civ],126,141);
+    c.fillStyle='#fff';c.font='800 20px '+FONTF;c.fillText(n,126,250);
+    c.fillStyle=col;c.font='900 34px '+FONTF;c.textAlign='left';c.fillText(pw,20,322);
+    await addAssetFromDataURL(n,cv.toDataURL('image/png'));
+  }
+  refreshAssets();
+}
+
+/* ---------- init ---------- */
+(async function(){
+  refreshPlayerTabs();refreshPlayerConf();refreshSe();refreshLogos();
+  await seedSamples();
+  buildTo(0);
+})();
+
+</script>
+</body>
+</html>
