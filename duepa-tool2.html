@@ -472,11 +472,11 @@ input[type=range]{accent-color:var(--gold)}
   <h3>動画書き出し（WebM）</h3>
   <div class="body">
     <div class="formRow"><label>書き出し方式</label>
-      <select id="expMode"><option value="rec">標準（録画・音声込み）</option><option value="frameA">高安定＋音声（スマホ推奨・SE込み）</option><option value="frame">高安定（音声なし・最速/最軽量）</option></select></div>
+      <select id="expMode"><option value="rec">標準（録画・音声込み）</option><option value="frameA">高安定＋音声（スマホ推奨・SE込み）</option><option value="frame">高安定（音声なし・最速/最軽量）</option><option value="sure">確実モード（iPhone向け・低速だが最も確実／音声なし）</option></select></div>
     <div class="formRow"><label>解像度</label>
       <select id="expRes"><option value="1920">1920×1080</option><option value="1280">1280×720</option></select></div>
     <div class="formRow"><label>再生速度</label>
-      <select id="expSpeed"><option value="1">1.0x</option><option value="0.75">0.75x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option></select></div>
+      <select id="expSpeed"><option value="1">1.0x</option><option value="0.75">0.75x</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="1.75">1.75x</option><option value="2">2.0x</option></select></div>
     <div class="formRow"><label>フレームレート</label>
       <select id="expFps"><option value="60">60fps（なめらか・推奨）</option><option value="30">30fps（軽量）</option></select></div>
     <div class="formRow" title="高いほど高画質ですが、端末によってはコマ落ちしてカクつきます"><label>画質(Mbps)</label>
@@ -501,6 +501,7 @@ const CIVLIST=['fire','water','nature','light','dark'];
 const canvas=$('#stage'), ctx=canvas.getContext('2d',{alpha:false,desynchronized:true});
 let FONTF='sans-serif';
 let LITE=false; // アニメ中は影を省いて高速化（書き出しでは常にfalse=高品質）
+let CURROT=0;   // 現在描画中のプレイヤー盤面の回転（縦向き2人対戦で±90度）
 let customFontData=null; // {name,dataURL}
 function applyFont(name){
   FONTF=name&&name.trim()?'"'+name.trim().replace(/"/g,'')+'", sans-serif':'sans-serif';
@@ -1159,7 +1160,8 @@ function drawCard(x,y,w,h,o){
   o=o||{};
   ctx.save();
   ctx.translate(x+w/2,y+h/2);
-  if(o.rot)ctx.rotate(o.rot);              // 盤面全体の向き（縦向き2人対戦など）
+  const _rot=(o.rot!=null?o.rot:CURROT);
+  if(_rot)ctx.rotate(_rot);              // 盤面全体の向き（縦向き2人対戦など）
   if(o.upside)ctx.rotate(Math.PI);
   if(o.tapped)ctx.rotate(o.tapRot!=null?o.tapRot:Math.PI/2);
   if(o.dflip)ctx.rotate(Math.PI); // Dスイッチ（上下左右反転）
@@ -1311,8 +1313,9 @@ function drawLinkedGroup(members,anchorX,anchorY,cw,ch,flip,tapped,opts){
 }
 function drawMark(r,text,flip,fillC,strokeC2,rot){
   if(!text)return;
+  const _r=(rot!=null?rot:CURROT);
   ctx.save();
-  if(rot){ctx.translate(r.x+r.w/2,r.y+r.h/2);ctx.rotate(rot);ctx.translate(-(r.x+r.w/2),-(r.y+r.h/2));}
+  if(_r){ctx.translate(r.x+r.w/2,r.y+r.h/2);ctx.rotate(_r);ctx.translate(-(r.x+r.w/2),-(r.y+r.h/2));}
   const cx=r.x+r.w/2, cy=r.y+r.h*(flip?0.18:0.82); // カードのテキスト欄側（上段は反転）
   ctx.textAlign='center';ctx.textBaseline='middle';
   // サイズはカード幅に応じて、最大幅に収まるよう縮小
@@ -1346,6 +1349,10 @@ function render(st,opts){
 function drawPanel(st,i,g,opts){
   // 縦向き2人対戦：カードを90度回して向かい合わせる（左パネルは右向き、右パネルは左向き）
   const VROT=g.vertical?(g.side==='left'?Math.PI/2:-Math.PI/2):0;
+  const _prevRot=CURROT; CURROT=VROT;
+  try{ drawPanelBody(st,i,g,opts,VROT); } finally { CURROT=_prevRot; }
+}
+function drawPanelBody(st,i,g,opts,VROT){
   const p=P(st,i), r=g.rect, pl=config.players[i], flip=g.flip;
   // プレイマット: 指定色を不透明度95%で（背景画像が透ける）
   rr(r.x,r.y,r.w,r.h,14);
@@ -1379,12 +1386,12 @@ function drawPanel(st,i,g,opts){
   }
   // ゾーンラベル: 内側(バトルゾーン側)に表示
   // 山札
-  drawCard(g.deck.x,g.deck.y,g.deck.w,g.deck.h,{faceDown:true,upside:flip,rot:VROT});
+  drawCard(g.deck.x,g.deck.y,g.deck.w,g.deck.h,{faceDown:true,upside:flip});
   ctx.fillStyle='#dfe9f5';ctx.font='800 19px '+FONTF;ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText(p.deck,g.deck.x+g.deck.w/2,flip?g.deck.y+g.deck.h+14:g.deck.y-13);
   // 墓地
   const topG=p.grave.length?p.grave[p.grave.length-1]:null;
-  if(p.grave.length)drawCard(g.grave.x,g.grave.y,g.grave.w,g.grave.h,{card:topG,alpha:.9,upside:flip,rot:VROT});
+  if(p.grave.length)drawCard(g.grave.x,g.grave.y,g.grave.w,g.grave.h,{card:topG,alpha:.9,upside:flip});
   else{rr(g.grave.x,g.grave.y,g.grave.w,g.grave.h,6);ctx.strokeStyle='#33414f';ctx.setLineDash([5,4]);ctx.lineWidth=1.5;ctx.stroke();ctx.setLineDash([]);}
   ctx.fillStyle='#dfe9f5';ctx.font='800 19px '+FONTF;ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText(p.grave.length,g.grave.x+g.grave.w/2,flip?g.grave.y+g.grave.h+14:g.grave.y-13);
@@ -1398,10 +1405,10 @@ function drawPanel(st,i,g,opts){
   const hideP=opts.hide&&opts.hide.partner===i;
   if(!hideP){
     if(ps.status==='zone'){
-      drawCard(pt.x,pt.y,pt.w,pt.h,{card:ps.card,partner:true,upside:flip,rot:VROT});
+      drawCard(pt.x,pt.y,pt.w,pt.h,{card:ps.card,partner:true,upside:flip});
       if(ps.mark)drawMark(pt,ps.mark,flip,ps.markFill,ps.markStroke);
     }
-    else if(ps.status==='facedown')drawCard(pt.x,pt.y,pt.w,pt.h,{faceDown:true,alpha:.85,upside:flip,rot:VROT});
+    else if(ps.status==='facedown')drawCard(pt.x,pt.y,pt.w,pt.h,{faceDown:true,alpha:.85,upside:flip});
   }
   hitRects.push({kind:'partner',p:i,rect:{x:pt.x,y:pt.y,w:pt.w,h:pt.h}});
   }
@@ -1421,11 +1428,11 @@ function drawPanel(st,i,g,opts){
         const cy2=(sl.clipY!=null?sl.clipY:(sl.clipH!=null?sl.y:sl.y-8));
         const ch2=(sl.clipH!=null?sl.clipH:sl.h+16);
         ctx.save();ctx.beginPath();ctx.rect(sl.x,cy2,cw2,ch2);ctx.clip();
-        drawCard(sl.x,sl.y,sl.w,sl.h,{card:c.card,tapped:c.tapped,upside:upM,tapRot:-Math.PI/2,locked:c.locked,dflip:c.dflip,rot:VROT});
+        drawCard(sl.x,sl.y,sl.w,sl.h,{card:c.card,tapped:c.tapped,upside:upM,tapRot:-Math.PI/2,locked:c.locked,dflip:c.dflip});
         ctx.restore();
         hitRects.push({kind:'mana',p:i,mi:k,rect:{x:sl.x,y:cy2,w:cw2,h:ch2}});
       }else{
-        drawCard(sl.x,sl.y,sl.w,sl.h,{card:c.card,tapped:c.tapped,upside:upM,tapRot:-Math.PI/2,locked:c.locked,dflip:c.dflip,rot:VROT});
+        drawCard(sl.x,sl.y,sl.w,sl.h,{card:c.card,tapped:c.tapped,upside:upM,tapRot:-Math.PI/2,locked:c.locked,dflip:c.dflip});
         hitRects.push({kind:'mana',p:i,mi:k,rect:sl});
       }
     });
@@ -1440,19 +1447,19 @@ function drawPanel(st,i,g,opts){
       for(let u=nU;u>=1;u--){
         const off=u*7, uc=sc.under[sc.under.length-u];
         drawCard(sr.x+off,flip?sr.y+off:sr.y-off,sr.w,sr.h,
-          {faceDown:!(uc&&uc.faceUp),card:uc&&uc.faceUp?uc.card:null,alpha:.85,upside:flip,rot:VROT});
+          {faceDown:!(uc&&uc.faceUp),card:uc&&uc.faceUp?uc.card:null,alpha:.85,upside:flip});
       }
     }
     if(sc.added){
       // 追加シールド: 金色の柔らかいグロー+枠
-      drawCard(sr.x,sr.y,sr.w,sr.h,{faceDown:!sc.faceUp,card:sc.faceUp?sc.card:null,upside:flip,glow:'#f0c33c',rot:VROT});
+      drawCard(sr.x,sr.y,sr.w,sr.h,{faceDown:!sc.faceUp,card:sc.faceUp?sc.card:null,upside:flip,glow:'#f0c33c'});
       ctx.save();
       rr(sr.x,sr.y,sr.w,sr.h,sr.w*0.055);
       if(!sc.faceUp){ctx.fillStyle='rgba(240,195,60,.16)';ctx.fill();}
       ctx.strokeStyle='rgba(240,195,60,.85)';ctx.lineWidth=2;ctx.stroke();
       ctx.restore();
     }else{
-      drawCard(sr.x,sr.y,sr.w,sr.h,{faceDown:!sc.faceUp,card:sc.faceUp?sc.card:null,upside:flip,rot:VROT});
+      drawCard(sr.x,sr.y,sr.w,sr.h,{faceDown:!sc.faceUp,card:sc.faceUp?sc.card:null,upside:flip});
     }
     hitRects.push({kind:'shield',p:i,idx:k,rect:sr});
   });
@@ -1475,7 +1482,7 @@ function drawPanel(st,i,g,opts){
         const uc=c.under[c.under.length-u];
         const dx=c.tapped?(flip?-off:off):0;
         const dy=c.tapped?0:(flip?off:-off);
-        drawCard(cr.x+dx,cr.y+dy,cr.w,cr.h,{card:uc,alpha:.85,upside:flip,tapped:c.tapped,dflip:c.dflip,rot:VROT});
+        drawCard(cr.x+dx,cr.y+dy,cr.w,cr.h,{card:uc,alpha:.85,upside:flip,tapped:c.tapped,dflip:c.dflip});
       }
     }
     if(c.link&&c.link.length>1){
@@ -1492,7 +1499,7 @@ function drawPanel(st,i,g,opts){
         hitRects.push({kind:'creature',p:i,uid:mc.uid,rect:{x:gi.cx+rx-hw/2,y:gi.cy+ry-hh/2,w:hw,h:hh}});
       });
     }else{
-      drawCard(cr.x,cr.y,cr.w,cr.h,{card:c.card,tapped:c.tapped,upside:flip,locked:c.locked,dflip:c.dflip,rot:VROT});
+      drawCard(cr.x,cr.y,cr.w,cr.h,{card:c.card,tapped:c.tapped,upside:flip,locked:c.locked,dflip:c.dflip});
       if(c.mark)drawMark(cr,c.mark,flip,c.markFill,c.markStroke,VROT);
       hitRects.push({kind:'creature',p:i,uid:c.uid,rect:cr});
     }
@@ -1636,6 +1643,23 @@ function drawLinkGroup(li,dx,dy,opts){
 // 盤面の向き（縦向き2人対戦なら±90度）
 function panelRot(g){ return g&&g.vertical?(g.side==='left'?Math.PI/2:-Math.PI/2):0; }
 function makeAnim(step,pre,post){
+  const _a=makeAnimRaw(step,pre,post);
+  // 縦向き2人対戦では、演出中も対象プレイヤーの盤面回転を適用する
+  const d0=step.data||{};
+  const pi=d0.p!=null?d0.p:(d0.tp!=null?d0.tp:(d0.a&&d0.a.p!=null?d0.a.p:null));
+  const NOROT=new Set(['turn','cutin','logo','telop','wait','lose']);
+  if(pi!=null&&!NOROT.has(step.type)&&_a&&typeof _a.draw==='function'){
+    const L=computeLayoutFor(post)||computeLayoutFor(pre);
+    const g=L&&L.players[pi];
+    const rot=(g&&g.vertical)?(g.side==='left'?Math.PI/2:-Math.PI/2):0;
+    if(rot){
+      const orig=_a.draw.bind(_a);
+      _a.draw=(tt)=>{const prev=CURROT;CURROT=rot;try{orig(tt);}finally{CURROT=prev;}};
+    }
+  }
+  return _a;
+}
+function makeAnimRaw(step,pre,post){
   const d=step.data||{}, t=step.type;
   const Lpre=computeLayoutFor(pre), Lpost=computeLayoutFor(post);
   const gp=i=>Lpre.players[i], gq=i=>Lpost.players[i];
@@ -1688,9 +1712,9 @@ function makeAnim(step,pre,post){
       // baseをpostにして既存カードを最初から新配置に（召喚演出中の重なりを防ぐ）
       return {base:post,hide:{uid:d.uid},seAt:0.55,draw(tt){
         if(tt<0.55){const e=EASE(tt/0.55);
-          drawCard(lerp(from.x,cr.x,e),lerp(from.y,cr.y,e),lerp(from.w||cr.w,cr.w,e),lerp(from.h||cr.h,cr.h,e),{card:d.card,glow:'#fff',upside:gq(d.p).flip,tapped:!!d.tapped,rot:panelRot(gq(d.p))});
+          drawCard(lerp(from.x,cr.x,e),lerp(from.y,cr.y,e),lerp(from.w||cr.w,cr.w,e),lerp(from.h||cr.h,cr.h,e),{card:d.card,glow:'#fff',upside:gq(d.p).flip,tapped:!!d.tapped});
         }else{
-          drawCard(cr.x,cr.y,cr.w,cr.h,{card:d.card,glow:'#f0c33c',scale:1+0.12*Math.sin((tt-0.55)/0.45*Math.PI),upside:gq(d.p).flip,tapped:!!d.tapped,rot:panelRot(gq(d.p))});
+          drawCard(cr.x,cr.y,cr.w,cr.h,{card:d.card,glow:'#f0c33c',scale:1+0.12*Math.sin((tt-0.55)/0.45*Math.PI),upside:gq(d.p).flip,tapped:!!d.tapped});
           if(config.fxSummonRing!==false){
             const c=ctr(cr),rr2=(tt-0.55)/0.45;
             ctx.save();ctx.globalAlpha=1-rr2;ctx.strokeStyle='#f0c33c';ctx.lineWidth=5;
@@ -1749,7 +1773,7 @@ function makeAnim(step,pre,post){
         if(li){
           drawLinkGroup(li,x-c0.x,y-c0.y,{upside:g.flip,glow:'#e0452f',tapped:tt>0.6});
         }else{
-          drawCard(x-src.w/2,y-src.h/2,src.w,src.h,{card:card?card.card:null,tapped:tt>0.6,glow:'#e0452f',upside:g.flip,rot:panelRot(g)});
+          drawCard(x-src.w/2,y-src.h/2,src.w,src.h,{card:card?card.card:null,tapped:tt>0.6,glow:'#e0452f',upside:g.flip});
         }
       }};}
     case 'block':{
@@ -1760,7 +1784,7 @@ function makeAnim(step,pre,post){
       return {base:pre,hide:li?{uids:li.uids.slice()}:{uid:d.uid},draw(tt){
         const sc=1+0.1*Math.sin(tt*Math.PI);
         if(li)drawLinkGroup(li,0,0,{upside:g.flip,glow:'#2e7fe0',scale:sc,tapped:tt>0.4});
-        else drawCard(src.x,src.y,src.w,src.h,{card:card?card.card:null,tapped:tt>0.4,glow:'#2e7fe0',scale:sc,upside:g.flip,rot:panelRot(g)});
+        else drawCard(src.x,src.y,src.w,src.h,{card:card?card.card:null,tapped:tt>0.4,glow:'#2e7fe0',scale:sc,upside:g.flip});
       }};}
     case 'destroy':{
       const g=gp(d.tp);const src=g.battle.find(b=>b.uid===d.uid);
@@ -1780,7 +1804,7 @@ function makeAnim(step,pre,post){
       return {base:pre,hide:{uid:d.uid},draw(tt){
         if(tt<0.26){
           const sh=Math.sin(tt*44)*(6*(1-tt/0.26));
-          drawCard(src.x+sh,src.y,src.w,src.h,{card:card?card.card:null,tapped:card&&card.tapped,glow:'#e0452f',upside:up,rot:panelRot(g)});
+          drawCard(src.x+sh,src.y,src.w,src.h,{card:card?card.card:null,tapped:card&&card.tapped,glow:'#e0452f',upside:up});
         }else{
           const rot=(up?Math.PI:0)+(card&&card.tapped?Math.PI/2:0);
           shatterDraw(cv,SG,src,(tt-0.26)/0.74,up,null,rot);
@@ -4300,6 +4324,10 @@ $('#btnExport').onclick=()=>{
 function updateExpNote(){
   const mode=$('#expMode')?$('#expMode').value:'rec';
   const el=$('#expDiskNote');if(!el)return;
+  if(mode==='sure'){
+    el.textContent='1コマずつ時間をかけて確実に記録します。処理は実尺よりかなり遅くなりますが（目安：実尺の3〜10倍）、コマ落ちがほぼ起きずiPhoneでも確実にMP4を書き出せます。音声（SE）は入りません。書き出し中は画面を消さず、そのまま置いておいてください。';
+    return;
+  }
   if(mode==='frameA'){
     el.textContent='1コマずつ描画しつつ実時間で進めるため音声（SE）も入り、iPhone/Androidでも安定して書き出せます。書き出し中は画面をスリープさせず、タブも切り替えないでください（バックグラウンドに入ると音声が途切れます）。';
   }else if(mode==='frame'){
@@ -4317,6 +4345,125 @@ $('#expShare').onclick=async ()=>{
   if(r==='opened')$('#exportStat').textContent='別タブで開きました。長押し→「ビデオを保存」または共有アイコンから保存できます。';
 };
 // ===== 高安定・1コマずつエンコード方式（音声なし・スマホ対応） =====
+// === 確実モード：1コマずつ十分な時間をかけて記録（iPhone向け・音声なし） ===
+async function exportSure(){
+  const res=+$('#expRes').value;
+  const speed=parseFloat($('#expSpeed').value);
+  const brMbps=+($('#expBr').value||8);
+  const FPS=+($('#expFps')?$('#expFps').value:30)||30;
+  let from=Math.max(1,Math.min(steps.length,+$('#expFrom').value||1));
+  let to=Math.max(from,Math.min(steps.length,+$('#expTo').value||steps.length));
+  const fromIdx=from-1,toIdx=to;
+  const partial=(fromIdx>0||toIdx<steps.length);
+  const baseName='duepa_board'+(partial?`_${from}-${to}`:'');
+  const oldW=canvas.width,oldH=canvas.height;
+  canvas.width=res;canvas.height=res*9/16;
+  const scale=res/W;
+  ctx.setTransform(scale,0,0,scale,0,0);
+  const cleanup=()=>{ctx.setTransform(1,0,0,1,0,0);canvas.width=oldW;canvas.height=oldH;buildTo(steps.length);};
+
+  const SIMUL=new Set(['draw','break','destroy','bounce','tomana','toshield','todeck','addshield','trigger','shieldburn','sbounce','tapToggle','mtap','mshow']);
+  const STG={draw:130};
+  function prepGroup(pl){
+    if(pl._anims)return pl._anims;
+    LITE=false;
+    const anims=pl.group.map(st=>makeAnim(st,pl.pre,pl.post));
+    const hide={uids:[],shields:[]};
+    anims.forEach(a=>{if(a.hide){if(a.hide.uid!=null)hide.uids.push(a.hide.uid);if(a.hide.shield)hide.shields.push(a.hide.shield);if(a.hide.partner!=null)hide.partner=a.hide.partner;if(a.hide.mana)hide.mana=a.hide.mana;}});
+    pl._anims={anims,hide};return pl._anims;
+  }
+  function drawAt(pl,tt){
+    LITE=false;
+    const {anims,hide}=prepGroup(pl);
+    render(anims[0].base,{hide});
+    anims.forEach(a=>a.draw(tt));
+    autoLogo(pl.group[0],tt,anims[0].base);
+  }
+
+  $('#expStart').disabled=true;$('#expShare').style.display='none';lastExport=null;
+  $('#exportProg i').style.width='0%';
+  $('#exportStat').textContent='準備中…';
+
+  let pre=initState();
+  for(let k=0;k<fromIdx;k++)applyStep(pre,steps[k]);
+  const plan=[];
+  {
+    let i=fromIdx, cur=JSON.parse(JSON.stringify(pre));
+    while(i<toIdx){
+      let j=i+1;
+      if(SIMUL.has(steps[i].type)) while(j<toIdx&&steps[j].type===steps[i].type)j++;
+      const group=steps.slice(i,j);
+      const post=JSON.parse(JSON.stringify(cur));group.forEach(st=>applyStep(post,st));
+      const stg=(STG[group[0].type]||0)/speed/1000;
+      const dur=(((group[0].data&&group[0].data.dur)||DUR[group[0].type]||0.8))/speed + (group.length-1)*stg;
+      plan.push({group,pre:JSON.parse(JSON.stringify(cur)),post,nf:Math.max(1,Math.round(dur*FPS)),holdf:Math.round(0.42/speed*FPS)});
+      cur=post;i=j;
+    }
+  }
+  const totalFrames=plan.reduce((a,pl)=>a+pl.nf+pl.holdf,0)+FPS;
+  let done=0;
+
+  // 手動送りで1コマずつ、十分な間隔をあけて記録
+  const cs=canvas.captureStream(0);
+  const track=cs.getVideoTracks()[0];
+  const cand=['video/mp4;codecs=avc1.42E01E','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
+  const mime=cand.find(m=>{try{return MediaRecorder.isTypeSupported(m);}catch(e){return false;}})||'';
+  const ext=mime.includes('mp4')?'mp4':'webm';
+  let rec;
+  try{ rec=new MediaRecorder(cs,mime?{mimeType:mime,videoBitsPerSecond:brMbps*1000000}:{videoBitsPerSecond:brMbps*1000000}); }
+  catch(e){ $('#exportStat').textContent='この端末は動画書き出しに対応していません: '+e.message; cleanup();$('#expStart').disabled=false; return; }
+  const chunks=[];rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
+  const stopped=new Promise(r=>rec.onstop=r);
+
+  // 1コマあたりの待ち時間（十分に長く取り、確実に取り込ませる）
+  const HOLD=Math.max(45,Math.round(1000/FPS*1.6)); // 1コマあたりの確保時間
+  const t0=performance.now();
+  try{
+    rec.start();
+    const emit=async()=>{
+      // 描画完了を待ってからフレームを送り、さらに取り込み時間を確保
+      await new Promise(r=>requestAnimationFrame(()=>r()));
+      if(track.requestFrame)track.requestFrame();
+      else if(cs.requestFrame)cs.requestFrame();
+      done++;
+      if(done%5===0){
+        const pct=Math.min(99,done/totalFrames*100);
+        const el=(performance.now()-t0)/1000;
+        const eta=done>10?Math.round(el/done*(totalFrames-done)):null;
+        $('#exportProg i').style.width=pct+'%';
+        $('#exportStat').textContent=`確実モードで記録中… ${Math.round(pct)}%`+(eta?`（残り約${eta<60?eta+'秒':Math.ceil(eta/60)+'分'}）`:'');
+      }
+      await new Promise(r=>setTimeout(r,HOLD));
+    };
+    for(const pl of plan){
+      for(let f=1;f<=pl.nf;f++){ drawAt(pl,f/pl.nf); await emit(); }
+      for(let f=0;f<pl.holdf;f++){ render(pl.post,{}); await emit(); }
+    }
+    {
+      const last=plan.length?plan[plan.length-1].post:pre;
+      for(let f=0;f<FPS;f++){ render(last,{}); await emit(); }
+    }
+    $('#exportProg i').style.width='100%';
+    $('#exportStat').textContent='ファイルを生成中…';
+    await new Promise(r=>setTimeout(r,500));
+    rec.stop();await stopped;
+    const blob=new Blob(chunks,{type:mime||('video/'+ext)});
+    const mb=(blob.size/1048576).toFixed(1);
+    lastExport={name:baseName+'.'+ext,blob};$('#expShare').style.display='';
+    download(baseName+'.'+ext,blob);
+    const min=((performance.now()-t0)/60000).toFixed(1);
+    // 記録に実時間がかかるぶん、動画の尺は本来より長くなる（編集アプリでの倍速指定を案内）
+    const realSec=totalFrames/FPS;
+    const actualSec=(performance.now()-t0)/1000;
+    const rate=(actualSec/realSec);
+    const hint=rate>1.25?` ※動画の尺が本来の約${rate.toFixed(1)}倍になっています。編集アプリで再生速度を${rate.toFixed(1)}倍にすると意図した速さになります。`:'';
+    $('#exportStat').textContent=`完了！ ${baseName}.${ext}（${mb}MB / 音声なし / 所要${min}分）を保存しました。`+hint+(navigator.canShare?' 「保存 / 共有」から写真・ファイルに保存できます。':'');
+  }catch(err){
+    $('#exportStat').textContent='書き出しに失敗しました: '+err.message;
+  }
+  cleanup();
+  $('#expStart').disabled=false;
+}
 async function exportByFrames(withAudio){
   const res=+$('#expRes').value;
   const speed=parseFloat($('#expSpeed').value);
@@ -4503,6 +4650,7 @@ async function exportByFrames(withAudio){
 $('#expMode')&&($('#expMode').onchange=updateExpNote);
 $('#expStart').onclick=async ()=>{
   if(!steps.length){alert('手順がありません');return;}
+  if($('#expMode')&&$('#expMode').value==='sure'){ return exportSure(); }
   if($('#expMode')&&($('#expMode').value==='frame'||$('#expMode').value==='frameA')){ return exportByFrames($('#expMode').value==='frameA'); }
   const res=+$('#expRes').value;
   const speed=parseFloat($('#expSpeed').value);
