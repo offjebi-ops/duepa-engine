@@ -780,6 +780,18 @@ let hitRects=[];
 let playing=false, stopFlag=false;
 let animateOnAdd=true;
 
+/* プレイマット色を「文字として読める明るさ」に持ち上げる。
+   色相と彩度の比率はそのままなので、同じ色のまま明るくなる。 */
+function matTextCol(pl){
+  const hx=((pl&&pl.mat)||'#16222e').replace('#','');
+  let r=parseInt(hx.slice(0,2),16),g=parseInt(hx.slice(2,4),16),b=parseInt(hx.slice(4,6),16);
+  if(!isFinite(r)||!isFinite(g)||!isFinite(b))return '#ffffff';
+  const mx=Math.max(r,g,b);
+  if(mx<8)return '#e8eef6';                                 // ほぼ黒のマットは色味が無いので白にする
+  if(mx<214){const k=214/mx;r*=k;g*=k;b*=k;}                // 暗い帯の上でも読める明るさまで
+  const c=v=>Math.max(0,Math.min(255,Math.round(v)));
+  return `rgb(${c(r)},${c(g)},${c(b)})`;
+}
 function cardName(c){ if(!c)return ''; if(c.name)return c.name; const a=assets.find(x=>x.id===c.a); return a?a.name:''; }
 function cardImg(c){ if(!c||c.a==null)return null; const a=assets.find(x=>x.id===c.a); return a?a.img:null; }
 
@@ -2737,6 +2749,7 @@ function makeAnimRaw(step,pre,post){
     case 'reorder':case 'bulkPlace':case 'bulkClear':case 'tapToggle':case 'adjust':case 'setpartner':case 'pfaceup':return {base:post,draw(){}};
     case 'turn':{
       // 表示範囲：画面全体（既定）か、そのプレイヤーのプレイマットの中だけか
+      const msgCol=matTextCol(config.players[d.p]);
       const pr=(config.turnScope==='panel')?(gp(d.p)&&gp(d.p).rect):null;
       const A=pr?{x:pr.x,y:pr.y,w:pr.w,h:pr.h}:{x:0,y:0,w:W,h:1044};
       const bh=pr?Math.max(56,Math.min(120,pr.h*0.26)):120;
@@ -2747,7 +2760,8 @@ function makeAnimRaw(step,pre,post){
         ctx.save();ctx.globalAlpha=a;
         if(pr){ctx.beginPath();ctx.roundRect(pr.x,pr.y,pr.w,pr.h,14);ctx.clip();}
         ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(A.x,cy-bh/2,A.w,bh);
-        ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillStyle=msgCol;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.shadowColor='rgba(0,0,0,.85)';ctx.shadowBlur=8;
         const nm=config.players[d.p].name;
         const tn=(post.turnCounts&&post.turnCounts[d.p])||post.turnNo;
         const tpl=(d.text!=null&&d.text!=='')?d.text:(config.turnText||'{name} ターン{n}');
@@ -2756,6 +2770,7 @@ function makeAnimRaw(step,pre,post){
         let fs=fs0; ctx.font='900 '+fs+'px '+FONTF;
         while(ctx.measureText(msg).width>A.w*(pr?0.86:0.56)&&fs>(pr?16:22)){fs-=2;ctx.font='900 '+fs+'px '+FONTF;}
         ctx.fillText(msg,A.x+A.w/2,cy);
+        ctx.shadowBlur=0;
         ctx.strokeStyle=config.players[d.p].nameCol||civMain(config.players[d.p]);ctx.lineWidth=pr?3:4;
         const x0=A.x+A.w*(pr?0.06:0.2), x1=A.x+A.w*(pr?0.94:0.8);
         ctx.beginPath();ctx.moveTo(x0,cy-bh/2);ctx.lineTo(x1,cy-bh/2);ctx.moveTo(x0,cy+bh/2);ctx.lineTo(x1,cy+bh/2);ctx.stroke();
