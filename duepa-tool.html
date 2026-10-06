@@ -1652,7 +1652,9 @@ function drawLinkedGroup(members,anchorX,anchorY,cw0,ch0,flip,tapped,opts){
   const n=members.length;
   const step=cw+2;                       // 長辺どうしを接着（カード幅ぶん）
   const gw=cw*n+2*(n-1);
-  const cx=gr.cx, cy=gr.cy;
+  // 演出中は中心を呼び出し側が指定できる。タップの有無でアンカーの意味が変わっても
+  // 中心が動かないので、回転の瞬間にグループが飛ばない。
+  const cx=(opts.center?opts.center.x:gr.cx), cy=(opts.center?opts.center.y:gr.cy);
   const vert=!!opts.vert;
   // 盤面の向き：縦向きモードでは opts.rot（呼び出し側が渡す）を使う
   const _boardRot=(opts.rot!=null?opts.rot:CURROT);
@@ -2098,7 +2100,7 @@ function drawLinkGroup(li,dx,dy,opts){
   const tapped=opts.tapped!=null?opts.tapped:(li.members[0]&&li.members[0].tapped);
   // 未タップ時の左上基準（回転は drawLinkedGroup が担当）
   const ax=li.baseX+dx, ay=li.baseY+dy;
-  return drawLinkedGroup(li.members,ax,ay,li.cw,li.ch,!!opts.upside,!!tapped,{glow:opts.glow,scale:opts.scale,bz:li.bz});
+  return drawLinkedGroup(li.members,ax,ay,li.cw,li.ch,!!opts.upside,!!tapped,{glow:opts.glow,scale:opts.scale,bz:li.bz,center:opts.center});
 }
 // 盤面の向き（縦向き2人対戦なら±90度）
 function panelRot(g){ return g&&g.vertical?(g.side==='left'?Math.PI/2:-Math.PI/2):0; }
@@ -2224,14 +2226,19 @@ function makeAnimRaw(step,pre,post){
       if(!src)return {base:pre,draw(){}};
       const li=linkInfo(pre,d.p,d.uid,g);
       const c0=li?ctr(li.box):ctr(src);
+      // 攻撃後はタップされるので、リンクはグループごと倒れて置き場所が変わる。
+      // 帰り先をその「攻撃後の位置」にしておくと、終わった瞬間にずれない。
+      const liPost=li?linkInfo(post,d.p,d.uid,gq(d.p)):null;
+      const cEnd=liPost?ctr(liPost.box):c0;
       const hideSet=li?{uids:li.uids.slice()}:{uid:d.uid};
       return {base:pre,hide:hideSet,draw(tt){
         let x,y;
+        const home=li?cEnd:c0;
         if(tt<0.45){const e=Math.pow(tt/0.45,2);x=lerp(c0.x,to.x,e);y=lerp(c0.y,to.y,e);}
         else if(tt<0.6){x=to.x;y=to.y;          ctx.save();ctx.globalAlpha=(1-(tt-0.45)/0.15)*0.35;ctx.fillStyle='#ff3b1f';ctx.fillRect(0,0,W,H);ctx.restore();}
-        else{const e=EASE((tt-0.6)/0.4);x=lerp(to.x,c0.x,e);y=lerp(to.y,c0.y,e);}
+        else{const e=EASE((tt-0.6)/0.4);x=lerp(to.x,home.x,e);y=lerp(to.y,home.y,e);}
         if(li){
-          drawLinkGroup(li,x-c0.x,y-c0.y,{upside:g.flip,glow:'#e0452f',tapped:tt>0.6});
+          drawLinkGroup(li,0,0,{upside:g.flip,glow:'#e0452f',tapped:tt>0.6,center:{x,y}});
         }else{
           drawCard(x-src.w/2,y-src.h/2,src.w,src.h,{card:card?card.card:null,tapped:tt>0.6,glow:'#e0452f',upside:g.flip});
         }
@@ -2241,9 +2248,12 @@ function makeAnimRaw(step,pre,post){
       const card=P(pre,d.p).battle.find(b=>b.uid===d.uid);
       if(!src)return {base:pre,draw(){}};
       const li=linkInfo(pre,d.p,d.uid,g);
+      const liPostB=li?linkInfo(post,d.p,d.uid,gq(d.p)):null;
+      const cB0=li?ctr(li.box):null, cB1=liPostB?ctr(liPostB.box):cB0;
       return {base:pre,hide:li?{uids:li.uids.slice()}:{uid:d.uid},draw(tt){
         const sc=1+0.1*Math.sin(tt*Math.PI);
-        if(li)drawLinkGroup(li,0,0,{upside:g.flip,glow:'#2e7fe0',scale:sc,tapped:tt>0.4});
+        if(li)drawLinkGroup(li,0,0,{upside:g.flip,glow:'#2e7fe0',scale:sc,tapped:tt>0.4,
+          center:(tt>0.4?cB1:cB0)});
         else drawCard(src.x,src.y,src.w,src.h,{card:card?card.card:null,tapped:tt>0.4,glow:'#2e7fe0',scale:sc,upside:g.flip});
       }};}
     case 'destroy':{
