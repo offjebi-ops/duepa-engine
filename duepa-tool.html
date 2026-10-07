@@ -45,7 +45,10 @@ main{flex:1; display:flex; min-height:0}
 }
 #hintBar.idle{color:var(--dim); background:transparent}
 #canvasBox{flex:1; display:flex; align-items:center; justify-content:center; min-height:0; padding:8px; background:#080c11}
-canvas#stage{max-width:100%; max-height:100%; border-radius:6px; box-shadow:0 0 0 1px var(--line), 0 12px 40px rgba(0,0,0,.6); touch-action:manipulation}
+canvas#stage{max-width:100%; max-height:100%; border-radius:6px; box-shadow:0 0 0 1px var(--line), 0 12px 40px rgba(0,0,0,.6); touch-action:manipulation;
+  /* 盤面を独立した層として扱わせる。こうしないと中身が変わるたびに影や角丸まで
+     描き直され、環境によっては画面がちらつく */
+  transform:translateZ(0); will-change:transform; backface-visibility:hidden}
 /* ドラッグ調整中だけスクロールを止めて、指の動きを全部ドラッグに回す */
 canvas#stage.layEdit{touch-action:none; cursor:move}
 #transport{
@@ -672,7 +675,22 @@ const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
 const CIVCOL={fire:'#e0452f',water:'#2e7fe0',nature:'#3fae5a',light:'#d8c94f',dark:'#8e5fd0',colorless:'#9aa6b2',rainbow:'#c04fe0'};
 const CIVNAME={fire:'火',water:'水',nature:'自然',light:'光',dark:'闇',colorless:'無',rainbow:'多'};
 const CIVLIST=['fire','water','nature','light','dark'];
-const canvas=$('#stage'), ctx=canvas.getContext('2d',{alpha:false,desynchronized:true});
+/* desynchronized:true（低遅延キャンバス）は使わない。
+   これは「描いている途中でも、できたところから画面に出してよい」という指定で、
+   お絵かきアプリ向けの設定。アニメーションでは、背景だけ描けた段階の未完成のコマが
+   そのまま表示されてしまい、盤面が消えたように見えてチカチカする。
+   Windows では実際にこの経路が使われるため、同じファイルでも環境によって症状が出る。 */
+const canvas=$('#stage');
+/* 画面に出すキャンバスへ直接描かず、いったん裏で1コマを描き切ってから一度に貼る。
+   こうしないと、描いている途中（背景だけ描けた状態など）が画面に出て、
+   盤面が消えたように見えてチカチカする。貼り付けは一回の操作なので途中が見えない。 */
+const screenCtx=canvas.getContext('2d',{alpha:false});
+const _buf=document.createElement('canvas');
+_buf.width=canvas.width;_buf.height=canvas.height;
+const ctx=_buf.getContext('2d',{alpha:false});   // 以降の描画はすべて裏へ
+function syncBuf(){ if(_buf.width!==canvas.width||_buf.height!==canvas.height){_buf.width=canvas.width;_buf.height=canvas.height;} }
+let _holdPresent=0;   // >0 の間は画面へ出さない（演出まで描いてから出す）
+function present(){ try{ screenCtx.setTransform(1,0,0,1,0,0); screenCtx.drawImage(_buf,0,0); }catch(e){} }
 let FONTF='sans-serif';
 let LITE=false; // アニメ中は影を省いて高速化（書き出しでは常にfalse=高品質）
 // 描画ループの世代。新しいアニメが始まった時点で古いループは即座に降りる。
@@ -1555,88 +1573,54 @@ function chip(x,y,label,val,right,color){
   ctx.fillText(t,xx+11,y+16);
   return w;
 }
-let _bgCache=null,_bgKey='',_bgGrad=null;
-function getBgCache(){
-  const key=(bgImg?bgImg.dataURL.length+'@'+(bgImg.img&&bgImg.img.complete):'none');
-  if(_bgCache&&_bgKey===key)return _bgCache;
-  const cv=document.createElement('canvas');cv.width=W;cv.height=H;
-  const c=cv.getContext('2d');
-  if(bgImg&&bgImg.img){
-    const img=bgImg.img, s=Math.max(W/img.width,H/img.height);
-    const dw=img.width*s, dh=img.height*s;
-    c.drawImage(img,(W-dw)/2,(H-dh)/2,dw,dh);
-  }else{
-    const bg=c.createRadialGradient(W/2,H/2,100,W/2,H/2,1200);
-    bg.addColorStop(0,'#13202e');bg.addColorStop(1,'#070b10');
-    c.fillStyle=bg;c.fillRect(0,0,W,H);
-    c.strokeStyle='rgba(255,255,255,.03)';c.lineWidth=1;
-    for(let x=0;x<W;x+=80){c.beginPath();c.moveTo(x,0);c.lineTo(x,H);c.stroke();}
-  }
-  _bgCache=cv;_bgKey=key;return cv;
-}
-function invalidateBg(){_bgCache=null;}
-// 描画状態を初期値へ戻す（save/restore の取りこぼしや外部要因への保険）
-const _NODASH=[];
+// 書き出し中は盤面を縮小して描く。その倍率を覚えておき、毎コマの初期化で戻す。
+let BASE_SCALE=1;
+// 1コマの描画を必ず同じ状態から始める（どこかの演出が設定を残しても次へ漏らさない）
 function resetCtx(){
   try{
-    // 既定値と違うときだけ書き戻す（毎コマ全部設定すると描画が重くなるため）
-    ctx.setTransform(1,0,0,1,0,0);
+    ctx.setTransform(BASE_SCALE,0,0,BASE_SCALE,0,0);
     if(ctx.globalAlpha!==1)ctx.globalAlpha=1;
     if(ctx.globalCompositeOperation!=='source-over')ctx.globalCompositeOperation='source-over';
     if(ctx.shadowBlur!==0)ctx.shadowBlur=0;
-    if(ctx.shadowOffsetX!==0)ctx.shadowOffsetX=0;
     if(ctx.shadowOffsetY!==0)ctx.shadowOffsetY=0;
-    if(ctx.getLineDash&&ctx.getLineDash().length)ctx.setLineDash(_NODASH);
-    if(ctx.lineDashOffset!==0)ctx.lineDashOffset=0;
-    if(ctx.filter&&ctx.filter!=='none')ctx.filter='none';
   }catch(e){}
 }
-/* 背景は裏のキャンバスへ焼いて使い回す（毎コマ描き直すとコマ落ちするため）。
-   ただしその中身は端末側の都合で失われることがあり、そうなると背景が抜けて
-   前のコマが透け、画面全体がちらつく。そこで時々1ドットだけ覗いて中身の有無を確かめ、
-   失われていたら焼き直す。点検は0.4秒に1回なので費用はほぼ無い。 */
-let _bgCheckAt=0;
-function bgCanvasOK(cv){
-  if(!cv||cv.width!==W||cv.height!==H)return false;
-  const now=(typeof performance!=='undefined'?performance.now():Date.now());
-  if(now-_bgCheckAt<400)return true;
-  _bgCheckAt=now;
-  try{
-    const c=cv.getContext('2d');
-    if(c.isContextLost&&c.isContextLost())return false;
-    return c.getImageData(1,1,1,1).data[3]>200;   // 不透明なら中身は生きている
-  }catch(e){ return false; }
+
+/* ---------- 背景 ----------
+   背景は毎コマ変わらないので、1920x1080に焼いた ImageBitmap を1枚だけ持ち、
+   毎コマそれを等倍で貼る。背景を変えたときだけ焼き直す。
+   ImageBitmap はキャンバスと違い端末側の都合で中身が失われにくく、
+   大きな画像を毎コマ縮小するより軽い。焼けていない間は元の素材から直接描くので、
+   どの時点でも背景が欠けることはない。 */
+let _bgBmp=null;
+function paintBg(c){                       // 背景そのものを c に描く
+  const im=bgImg&&bgImg.img;
+  if(im&&im.complete&&im.naturalWidth>0){
+    const sc=Math.max(W/im.naturalWidth,H/im.naturalHeight);
+    const dw=im.naturalWidth*sc, dh=im.naturalHeight*sc;
+    c.drawImage(im,(W-dw)/2,(H-dh)/2,dw,dh);
+    return;
+  }
+  const g=c.createRadialGradient(W/2,H/2,100,W/2,H/2,1200);
+  g.addColorStop(0,'#13202e');g.addColorStop(1,'#070b10');
+  c.fillStyle=g;c.fillRect(0,0,W,H);
+  c.strokeStyle='rgba(255,255,255,.03)';c.lineWidth=1;
+  c.beginPath();
+  for(let x=0;x<W;x+=80){c.moveTo(x,0);c.lineTo(x,H);}
+  c.stroke();
+}
+function invalidateBg(){
+  try{ if(_bgBmp&&_bgBmp.close)_bgBmp.close(); }catch(e){}
+  _bgBmp=null;
+  if(typeof createImageBitmap!=='function')return;
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  try{ paintBg(cv.getContext('2d')); }catch(e){ return; }
+  createImageBitmap(cv).then(b=>{_bgBmp=b;try{render(state);}catch(e){}}).catch(()=>{});
 }
 function drawBg(){
-  let cv=null;
-  try{ cv=getBgCache(); }catch(e){ cv=null; }
-  if(bgCanvasOK(cv)){
-    try{ ctx.drawImage(cv,0,0); return; }catch(e){}
-  }
-  _bgCache=null;_bgCheckAt=0;   // 焼き直す
-  try{ cv=getBgCache(); if(cv){ctx.drawImage(cv,0,0); return;} }catch(e){}
-  // それでも駄目なときは直接描いて、背景に穴を開けない
-  if(bgImg&&bgImg.img){
-    const img=bgImg.img, sc=Math.max(W/img.width,H/img.height);
-    const dw=img.width*sc, dh=img.height*sc;
-    try{ ctx.drawImage(img,(W-dw)/2,(H-dh)/2,dw,dh); return; }catch(e){}
-  }
-  // グラデーションと罫線はまとめて描く（1本ずつ描くより軽い）。
-  // グラデーションは「中身を持たない設定値」なので、キャンバスと違って失われない。
-  if(!_bgGrad){
-    _bgGrad=ctx.createRadialGradient(W/2,H/2,100,W/2,H/2,1200);
-    _bgGrad.addColorStop(0,'#13202e');_bgGrad.addColorStop(1,'#070b10');
-  }
-  ctx.fillStyle=_bgGrad;ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle='rgba(255,255,255,.03)';ctx.lineWidth=1;
-  ctx.beginPath();
-  for(let x=0;x<W;x+=80){ctx.moveTo(x,0);ctx.lineTo(x,H);}
-  ctx.stroke();
+  if(_bgBmp){ try{ ctx.drawImage(_bgBmp,0,0); return; }catch(e){ _bgBmp=null; } }
+  paintBg(ctx);                            // 焼けていなければその場で描く
 }
-// GPU側の都合でキャンバスの中身が失われたとき（Windowsのドライバ再起動などで起こる）に
-// キャッシュを捨てて描き直す。放っておくと以降ずっと表示が壊れたままになる。
-canvas.addEventListener('contextlost',e=>{ _bgCache=null; });
-canvas.addEventListener('contextrestored',()=>{ _bgCache=null; try{render(state);}catch(e){} });
 // リンクグループの「実際の表示矩形」を返す（タップ時の回転・はみ出し補正込み）
 // タップ中リンクがバトルゾーンに収まるための縮小率（リンクだけに適用）
 function linkFitScale(members,cw,ch,tapped,bz,rowsN){
@@ -1770,13 +1754,11 @@ function drawMark(r,text,flip,fillC,strokeC2,rot){
 function render(st,opts){
   opts=opts||{};
   hitRects=[];
+  syncBuf();
   // 1コマごとに必ず既知の状態から描き始める。
   // どこかの演出が変形・透明度・影を残しても、その影響が次のコマへ漏れない。
   resetCtx();
-  // 背景が1ドットでも欠けると前のコマが透けて見えるので、まず不透明に塗りつぶす
-  ctx.fillStyle='#070b10';ctx.fillRect(0,0,W,H);
-  // 背景（オフスクリーンにキャッシュして毎フレームの再生成を回避）
-  drawBg();
+  drawBg();                // 背景が毎コマ全面を塗り直す（前のコマは残らない）
   const L=computeLayout(st);
   for(let i=0;i<config.num;i++)drawPanel(st,i,L.players[i],opts);
   // 下部・左右の黒帯（動画編集用の余白）
@@ -1784,6 +1766,7 @@ function render(st,opts){
   if(L.padS>0){ctx.fillStyle='#000';ctx.fillRect(0,0,L.padS,H);ctx.fillRect(W-L.padS,0,L.padS,H);}
   // レイアウト調整モードの枠（通し再生・書き出し中は出さない）
   if(layEdit&&!playing)drawLayEditOverlay(L,L.padB||0);
+  if(!_holdPresent)present();   // 演出を重ねる場合は呼び出し側がまとめて出す
   return L;
 }
 /* ドラッグ調整用：動かせるゾーンの矩形を集める。
@@ -3105,9 +3088,13 @@ function playStepAnim(step,pre,post,speed){
       const tt=Math.min(1,(now-t0)/dur);
       if(!seDone&&tt>=seAt){playSE(se);seDone=true;}
       LITE=true;
-      render(anim.base,{hide:anim.hide});
-      anim.draw(tt);
-      if(step.type!=='logo')autoLogo(step,tt,anim.base);
+      _holdPresent++;
+      try{
+        render(anim.base,{hide:anim.hide});
+        anim.draw(tt);
+        if(step.type!=='logo')autoLogo(step,tt,anim.base);
+      }finally{ _holdPresent--; }
+      present();
       if(tt<1)requestAnimationFrame(frame);else res(true);
     }
     requestAnimationFrame(frame);
@@ -3141,14 +3128,18 @@ function playGroupAnim(group,pre,post,speed){
       if(stopFlag){LITE=false;res(false);return;}
       const el=now-t0;
       LITE=true;
-      render(base,{hide});
-      anims.forEach((a,i)=>{
-        if(el<offs[i])return;
-        const tt=Math.min(1,(el-offs[i])/dur);
-        if(!seDone[i]&&tt>=seAts[i]){playSE(se);seDone[i]=true;}
-        a.draw(tt);
-      });
-      autoLogo(group[0],Math.min(1,el/total),base);
+      _holdPresent++;
+      try{
+        render(base,{hide});
+        anims.forEach((a,i)=>{
+          if(el<offs[i])return;
+          const tt=Math.min(1,(el-offs[i])/dur);
+          if(!seDone[i]&&tt>=seAts[i]){playSE(se);seDone[i]=true;}
+          a.draw(tt);
+        });
+        autoLogo(group[0],Math.min(1,el/total),base);
+      }finally{ _holdPresent--; }
+      present();
       LITE=false;
       if(el<total)requestAnimationFrame(frame);else res(true);
     }
@@ -3803,6 +3794,53 @@ canvas.addEventListener('click',e=>{
   }
   runModeOn(mode,hits);
 });
+/* ---------- 盤面の表示サイズ ----------
+   盤面は1920x1080で描き、画面に合わせて縮めて表示している。
+   このとき表示サイズが端末の物理ピクセルの途中で終わると、毎コマの縮小計算が
+   わずかに揺れ、背景やカードの輪郭がチカチカして見える。
+   （Windowsの既定である125%表示などで起きやすい）
+   そこで表示サイズを物理ピクセルの整数倍に丸めて固定する。 */
+function fitCanvas(){
+  const box=$('#canvasBox');
+  if(!box||!canvas)return;
+  const cs=getComputedStyle(box);
+  const padX=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
+  const padY=(parseFloat(cs.paddingTop)||0)+(parseFloat(cs.paddingBottom)||0);
+  const availW=box.clientWidth-padX, availH=box.clientHeight-padY;
+  if(!(availW>16&&availH>16)){canvas.style.width='';canvas.style.height='';return;}
+  const dpr=window.devicePixelRatio||1;
+  // 16:9を保ったまま入る最大の幅
+  const maxW=Math.min(availW,availH*W/H);
+  // 幅・高さがどちらも「CSS上も物理ピクセル上も整数」になる大きさを、大きい方から探す。
+  // 16の倍数なら高さ(9/16倍)も整数になるので、そこから物理ピクセルの条件を確かめる。
+  const fits=cw=>{
+    const ch=cw*H/W;
+    const a=cw*dpr, b2=ch*dpr;
+    return Math.abs(a-Math.round(a))<0.002&&Math.abs(b2-Math.round(b2))<0.002;
+  };
+  let best=0;
+  for(let cw=Math.floor(maxW/16)*16; cw>=160; cw-=16){ if(fits(cw)){best=cw;break;} }
+  if(!best)best=Math.max(160,Math.floor(maxW/16)*16);   // 見つからない拡大率では従来どおり
+  if(best<160||best>maxW+0.5){canvas.style.width='';canvas.style.height='';return;}
+  canvas.style.width=best+'px';
+  canvas.style.height=(best*H/W)+'px';
+}
+let _fitTimer=null;
+function fitCanvasSoon(){ if(_fitTimer)return; _fitTimer=requestAnimationFrame(()=>{_fitTimer=null;fitCanvas();}); }
+window.addEventListener('resize',fitCanvasSoon);
+if(window.ResizeObserver){
+  try{ new ResizeObserver(fitCanvasSoon).observe($('#canvasBox')); }catch(e){}
+}
+// 画面の拡大率が変わったとき（ウィンドウを別のモニタへ移した等）にも合わせ直す
+(function watchDpr(){
+  try{
+    const mq=matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+    const on=()=>{fitCanvas();watchDpr();};
+    if(mq.addEventListener)mq.addEventListener('change',on,{once:true});
+    else if(mq.addListener)mq.addListener(on);
+  }catch(e){}
+})();
+
 /* ---------- 操作パネルの開閉と幅 ----------
    盤面を触る操作が中心になるので、パネルを畳んで盤面を広く使えるようにする。 */
 let panelHidden=false;
@@ -3813,8 +3851,8 @@ function setPanelHidden(v){
   if(b){b.textContent=panelHidden?'｜◀ パネルを出す':'▶｜ パネルを畳む';
         b.classList.toggle('gold',panelHidden);}
   closeBoardMenu();
-  // キャンバスの表示サイズが変わるので描き直す
-  requestAnimationFrame(()=>render(state));
+  // キャンバスの表示サイズが変わるので合わせ直して描き直す
+  requestAnimationFrame(()=>{fitCanvas();render(state);});
 }
 $('#btnPanelToggle').onclick=()=>setPanelHidden(!panelHidden);
 (function(){
@@ -3824,7 +3862,7 @@ $('#btnPanelToggle').onclick=()=>setPanelHidden(!panelHidden);
   const apply=clientX=>{
     const w=Math.max(MINW,Math.min(MAXW,window.innerWidth-clientX));
     document.documentElement.style.setProperty('--panelW',w+'px');
-    requestAnimationFrame(()=>render(state));
+    requestAnimationFrame(()=>{fitCanvas();render(state);});
   };
   sp.addEventListener('pointerdown',e=>{
     dragging=true;sp.classList.add('on');
@@ -3839,7 +3877,7 @@ $('#btnPanelToggle').onclick=()=>setPanelHidden(!panelHidden);
   // ダブルクリックで既定幅に戻す
   sp.addEventListener('dblclick',()=>{
     document.documentElement.style.setProperty('--panelW','340px');
-    requestAnimationFrame(()=>render(state));});
+    requestAnimationFrame(()=>{fitCanvas();render(state);});});
 })();
 
 /* ---------- 盤面タップメニュー ----------
@@ -5944,8 +5982,8 @@ async function exportSure(){
   const oldW=canvas.width,oldH=canvas.height;
   canvas.width=res;canvas.height=res*9/16;
   const scale=res/W;
-  ctx.setTransform(scale,0,0,scale,0,0);
-  const cleanup=()=>{ctx.setTransform(1,0,0,1,0,0);canvas.width=oldW;canvas.height=oldH;buildTo(steps.length);};
+  BASE_SCALE=scale;ctx.setTransform(scale,0,0,scale,0,0);
+  const cleanup=()=>{BASE_SCALE=1;ctx.setTransform(1,0,0,1,0,0);canvas.width=oldW;canvas.height=oldH;buildTo(steps.length);};
 
   const SIMUL=new Set(['draw','break','destroy','bounce','tomana','toshield','todeck','addshield','trigger','shieldburn','sbounce','tapToggle','mtap','mshow']);
   const STG={draw:130};
@@ -5960,9 +5998,13 @@ async function exportSure(){
   function drawAt(pl,tt){
     LITE=false;
     const {anims,hide}=prepGroup(pl);
-    render(anims[0].base,{hide});
-    anims.forEach(a=>a.draw(tt));
-    autoLogo(pl.group[0],tt,anims[0].base);
+    _holdPresent++;                       // 1コマ分を描き切ってから画面へ出す
+    try{
+      render(anims[0].base,{hide});
+      anims.forEach(a=>a.draw(tt));
+      autoLogo(pl.group[0],tt,anims[0].base);
+    }finally{ _holdPresent--; }
+    present();
   }
 
   $('#expStart').disabled=true;$('#expShare').style.display='none';lastExport=null;
@@ -6008,6 +6050,7 @@ async function exportSure(){
     const emit=async()=>{
       // 描画完了を待ってからフレームを送り、さらに取り込み時間を確保
       await new Promise(r=>requestAnimationFrame(()=>r()));
+      present();
       if(track.requestFrame)track.requestFrame();
       else if(cs.requestFrame)cs.requestFrame();
       done++;
@@ -6062,9 +6105,10 @@ async function exportByFrames(withAudio){
   const oldW=canvas.width,oldH=canvas.height;
   canvas.width=res;canvas.height=res*9/16;
   const scale=res/W;
+  BASE_SCALE=scale;
   const setTf=()=>ctx.setTransform(scale,0,0,scale,0,0);
   setTf();
-  const cleanup=()=>{ctx.setTransform(1,0,0,1,0,0);canvas.width=oldW;canvas.height=oldH;buildTo(steps.length);};
+  const cleanup=()=>{BASE_SCALE=1;ctx.setTransform(1,0,0,1,0,0);canvas.width=oldW;canvas.height=oldH;buildTo(steps.length);};
 
   // フレーム列を生成する関数：各手順のアニメを DUR に基づきコマ分割
   const SIMUL=new Set(['draw','break','destroy','bounce','tomana','toshield','todeck','addshield','trigger','shieldburn','sbounce','tapToggle','mtap']);
@@ -6083,9 +6127,13 @@ async function exportByFrames(withAudio){
   function drawGroupAt(pl,tt){
     LITE=false;
     const {anims,hide}=prepGroup(pl);
-    render(anims[0].base,{hide});
-    anims.forEach(a=>a.draw(tt));
-    autoLogo(pl.group[0],tt,anims[0].base);
+    _holdPresent++;                       // 1コマ分を描き切ってから画面へ出す
+    try{
+      render(anims[0].base,{hide});
+      anims.forEach(a=>a.draw(tt));
+      autoLogo(pl.group[0],tt,anims[0].base);
+    }finally{ _holdPresent--; }
+    present();
   }
 
   $('#expStart').disabled=true;$('#expShare').style.display='none';lastExport=null;
@@ -6142,6 +6190,7 @@ async function exportByFrames(withAudio){
     rec.start();
     $('#exportStat').textContent=withAudio?'エンコード中…（実時間・音声込み）':'エンコード中…（1コマずつ生成）';
     const sendFrame=()=>{
+      present();
       if(track.requestFrame)track.requestFrame();
       else if(cs.requestFrame)cs.requestFrame();
       doneFrames++;
@@ -6248,7 +6297,7 @@ $('#expStart').onclick=async ()=>{
   const oldW=canvas.width,oldH=canvas.height;
   canvas.width=res;canvas.height=res*9/16;
   const scale=res/W;
-  ctx.setTransform(scale,0,0,scale,0,0);
+  BASE_SCALE=scale;ctx.setTransform(scale,0,0,scale,0,0);
   const ac=getAC();
   try{await ac.resume();}catch(e){}
   exportDest=ac.createMediaStreamDestination();
@@ -6278,7 +6327,7 @@ $('#expStart').onclick=async ()=>{
         types:[{description:'Video',accept:{[mime||('video/'+ext)]:['.'+ext]}}]});
       writer=await fh.createWritable();
     }catch(err){ if(err&&err.name==='AbortError'){
-        ctx.setTransform(1,0,0,1,0,0);canvas.width=oldW;canvas.height=oldH;render(state);
+        BASE_SCALE=1;ctx.setTransform(1,0,0,1,0,0);canvas.width=oldW;canvas.height=oldH;render(state);
         $('#exportStat').textContent='キャンセルしました。';return; } }
   }
   const chunks=[];
@@ -6326,7 +6375,7 @@ $('#expStart').onclick=async ()=>{
   rec.stop();await done;
   if(keepAlive){try{keepAlive.stop();}catch(e){}}
   exportDest=null;
-  ctx.setTransform(1,0,0,1,0,0);
+  BASE_SCALE=1;ctx.setTransform(1,0,0,1,0,0);
   canvas.width=oldW;canvas.height=oldH;
   $('#exportStat').textContent='エンコード終了処理…（画面が止まって見えても正常です）';
   await new Promise(r=>setTimeout(r,30));
@@ -6425,6 +6474,8 @@ async function seedSamples(){
   buildTo(0);
   syncLayUI();
   setPanelHidden(false);
+  fitCanvas();
+  invalidateBg();
 })();
 
 </script>
