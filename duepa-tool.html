@@ -675,6 +675,9 @@ const CIVLIST=['fire','water','nature','light','dark'];
 const canvas=$('#stage'), ctx=canvas.getContext('2d',{alpha:false,desynchronized:true});
 let FONTF='sans-serif';
 let LITE=false; // アニメ中は影を省いて高速化（書き出しでは常にfalse=高品質）
+// 描画ループの世代。新しいアニメが始まった時点で古いループは即座に降りる。
+// （これが無いと、古いループと新しいループが同じ1フレームに別々の盤面を描き、画面がちらつく）
+let animGen=0;
 let CURROT=0;   // 現在描画中のプレイヤー盤面の回転（縦向き2人対戦で±90度）
 let customFontData=null; // {name,dataURL}
 function applyFont(name){
@@ -1552,7 +1555,7 @@ function chip(x,y,label,val,right,color){
   ctx.fillText(t,xx+11,y+16);
   return w;
 }
-let _bgCache=null,_bgKey='';
+let _bgCache=null,_bgKey='',_bgGrad=null;
 function getBgCache(){
   const key=(bgImg?bgImg.dataURL.length+'@'+(bgImg.img&&bgImg.img.complete):'none');
   if(_bgCache&&_bgKey===key)return _bgCache;
@@ -1572,6 +1575,68 @@ function getBgCache(){
   _bgCache=cv;_bgKey=key;return cv;
 }
 function invalidateBg(){_bgCache=null;}
+// 描画状態を初期値へ戻す（save/restore の取りこぼしや外部要因への保険）
+const _NODASH=[];
+function resetCtx(){
+  try{
+    // 既定値と違うときだけ書き戻す（毎コマ全部設定すると描画が重くなるため）
+    ctx.setTransform(1,0,0,1,0,0);
+    if(ctx.globalAlpha!==1)ctx.globalAlpha=1;
+    if(ctx.globalCompositeOperation!=='source-over')ctx.globalCompositeOperation='source-over';
+    if(ctx.shadowBlur!==0)ctx.shadowBlur=0;
+    if(ctx.shadowOffsetX!==0)ctx.shadowOffsetX=0;
+    if(ctx.shadowOffsetY!==0)ctx.shadowOffsetY=0;
+    if(ctx.getLineDash&&ctx.getLineDash().length)ctx.setLineDash(_NODASH);
+    if(ctx.lineDashOffset!==0)ctx.lineDashOffset=0;
+    if(ctx.filter&&ctx.filter!=='none')ctx.filter='none';
+  }catch(e){}
+}
+/* 背景は裏のキャンバスへ焼いて使い回す（毎コマ描き直すとコマ落ちするため）。
+   ただしその中身は端末側の都合で失われることがあり、そうなると背景が抜けて
+   前のコマが透け、画面全体がちらつく。そこで時々1ドットだけ覗いて中身の有無を確かめ、
+   失われていたら焼き直す。点検は0.4秒に1回なので費用はほぼ無い。 */
+let _bgCheckAt=0;
+function bgCanvasOK(cv){
+  if(!cv||cv.width!==W||cv.height!==H)return false;
+  const now=(typeof performance!=='undefined'?performance.now():Date.now());
+  if(now-_bgCheckAt<400)return true;
+  _bgCheckAt=now;
+  try{
+    const c=cv.getContext('2d');
+    if(c.isContextLost&&c.isContextLost())return false;
+    return c.getImageData(1,1,1,1).data[3]>200;   // 不透明なら中身は生きている
+  }catch(e){ return false; }
+}
+function drawBg(){
+  let cv=null;
+  try{ cv=getBgCache(); }catch(e){ cv=null; }
+  if(bgCanvasOK(cv)){
+    try{ ctx.drawImage(cv,0,0); return; }catch(e){}
+  }
+  _bgCache=null;_bgCheckAt=0;   // 焼き直す
+  try{ cv=getBgCache(); if(cv){ctx.drawImage(cv,0,0); return;} }catch(e){}
+  // それでも駄目なときは直接描いて、背景に穴を開けない
+  if(bgImg&&bgImg.img){
+    const img=bgImg.img, sc=Math.max(W/img.width,H/img.height);
+    const dw=img.width*sc, dh=img.height*sc;
+    try{ ctx.drawImage(img,(W-dw)/2,(H-dh)/2,dw,dh); return; }catch(e){}
+  }
+  // グラデーションと罫線はまとめて描く（1本ずつ描くより軽い）。
+  // グラデーションは「中身を持たない設定値」なので、キャンバスと違って失われない。
+  if(!_bgGrad){
+    _bgGrad=ctx.createRadialGradient(W/2,H/2,100,W/2,H/2,1200);
+    _bgGrad.addColorStop(0,'#13202e');_bgGrad.addColorStop(1,'#070b10');
+  }
+  ctx.fillStyle=_bgGrad;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,.03)';ctx.lineWidth=1;
+  ctx.beginPath();
+  for(let x=0;x<W;x+=80){ctx.moveTo(x,0);ctx.lineTo(x,H);}
+  ctx.stroke();
+}
+// GPU側の都合でキャンバスの中身が失われたとき（Windowsのドライバ再起動などで起こる）に
+// キャッシュを捨てて描き直す。放っておくと以降ずっと表示が壊れたままになる。
+canvas.addEventListener('contextlost',e=>{ _bgCache=null; });
+canvas.addEventListener('contextrestored',()=>{ _bgCache=null; try{render(state);}catch(e){} });
 // リンクグループの「実際の表示矩形」を返す（タップ時の回転・はみ出し補正込み）
 // タップ中リンクがバトルゾーンに収まるための縮小率（リンクだけに適用）
 function linkFitScale(members,cw,ch,tapped,bz,rowsN){
@@ -1705,8 +1770,13 @@ function drawMark(r,text,flip,fillC,strokeC2,rot){
 function render(st,opts){
   opts=opts||{};
   hitRects=[];
+  // 1コマごとに必ず既知の状態から描き始める。
+  // どこかの演出が変形・透明度・影を残しても、その影響が次のコマへ漏れない。
+  resetCtx();
+  // 背景が1ドットでも欠けると前のコマが透けて見えるので、まず不透明に塗りつぶす
+  ctx.fillStyle='#070b10';ctx.fillRect(0,0,W,H);
   // 背景（オフスクリーンにキャッシュして毎フレームの再生成を回避）
-  ctx.drawImage(getBgCache(),0,0);
+  drawBg();
   const L=computeLayout(st);
   for(let i=0;i<config.num;i++)drawPanel(st,i,L.players[i],opts);
   // 下部・左右の黒帯（動画編集用の余白）
@@ -2930,6 +3000,11 @@ function resetLogoVideo(lg){
     const p=v.play(); if(p&&p.catch)p.catch(()=>{});
   }catch(e){}
 }
+// 表示が終わった動画ロゴを止める。再生しっぱなしだと以降もずっと描画負荷が残る。
+function stopLogoVideo(lg){
+  if(!lg||!lg.isVideo||!lg.video)return;
+  try{ if(!lg.video.paused)lg.video.pause(); }catch(e){}
+}
 function autoLogo(step,tt,base){
   const type=step.type, d=step.data||{};
   const key=SE_OF[type]||type;
@@ -2940,7 +3015,7 @@ function autoLogo(step,tt,base){
   // 演出の開始時に動画を頭出し（1回だけ）
   if(lg.isVideo){
     if(tt<0.06){ if(step._vk!==id){step._vk=id;resetLogoVideo(lg);} }
-    else if(tt>0.9){ step._vk=null; }
+    else if(tt>0.9){ step._vk=null; stopLogoVideo(lg); }
   }
   const pos=logoPosFor(d,base);
   drawLogoPop(lg,tt,pos.cx,pos.cy,pos.maxW,pos.maxH);
@@ -3016,6 +3091,7 @@ const SE_OF={turn:'turn',draw:'draw',charge:'charge',spend:'spend',
 
 function playStepAnim(step,pre,post,speed){
   return new Promise(res=>{
+    const myGen=++animGen;          // ここより前に始まったループは全て無効になる
     const anim=makeAnim(step,pre,post);
     const dur=(((step.data&&step.data.dur)||DUR[step.type]||0.8))/speed*1000;
     const se=SE_OF[step.type];
@@ -3024,14 +3100,15 @@ function playStepAnim(step,pre,post,speed){
     if(se&&seAt<=0){playSE(se);seDone=true;}
     const t0=performance.now();
     function frame(now){
-      if(stopFlag){LITE=false;res();return;}
+      if(myGen!==animGen){res(false);return;}   // 新しいアニメに引き継いだので描かずに降りる
+      if(stopFlag){LITE=false;res(false);return;}
       const tt=Math.min(1,(now-t0)/dur);
       if(!seDone&&tt>=seAt){playSE(se);seDone=true;}
       LITE=true;
       render(anim.base,{hide:anim.hide});
       anim.draw(tt);
       if(step.type!=='logo')autoLogo(step,tt,anim.base);
-      if(tt<1)requestAnimationFrame(frame);else res();
+      if(tt<1)requestAnimationFrame(frame);else res(true);
     }
     requestAnimationFrame(frame);
   });
@@ -3039,6 +3116,7 @@ function playStepAnim(step,pre,post,speed){
 const STAGGER={draw:130}; // 連続時に少しずつずらす手順(ms) タタタッというリズム
 function playGroupAnim(group,pre,post,speed){
   return new Promise(res=>{
+    const myGen=++animGen;
     const anims=group.map(st=>makeAnim(st,pre,post));
     // hideを統合
     const hide={uids:[],shields:[]};
@@ -3059,7 +3137,8 @@ function playGroupAnim(group,pre,post,speed){
     const seDone=anims.map((_,i)=>!se||(stg===0&&i>0));
     const t0=performance.now();
     function frame(now){
-      if(stopFlag){LITE=false;res();return;}
+      if(myGen!==animGen){res(false);return;}
+      if(stopFlag){LITE=false;res(false);return;}
       const el=now-t0;
       LITE=true;
       render(base,{hide});
@@ -3071,7 +3150,7 @@ function playGroupAnim(group,pre,post,speed){
       });
       autoLogo(group[0],Math.min(1,el/total),base);
       LITE=false;
-      if(el<total)requestAnimationFrame(frame);else res();
+      if(el<total)requestAnimationFrame(frame);else res(true);
     }
     requestAnimationFrame(frame);
   });
@@ -3123,6 +3202,7 @@ async function playAll(fromIdx,speed){
     i=j;
   }
   if(myToken!==playToken)return; // 新しい再生に引き継いだのでUIはそちらに任せる
+  LITE=false;                     // 演出用の簡略描画を解除して通常品質に戻す
   state=pre;cursor=Math.min(cursor,steps.length);
   playing=false;
   $('#btnPlay').disabled=false;$('#btnStop').disabled=true;
@@ -3250,8 +3330,8 @@ async function addStep(type,data){
     applyStep(state,step);
     cursor=steps.length;updateStepUI();
     stopFlag=false;
-    await playStepAnim(step,pre,state,parseFloat($('#speed').value));
-    render(state);
+    const done=await playStepAnim(step,pre,state,parseFloat($('#speed').value));
+    if(done){LITE=false;render(state);}   // 新しいアニメに引き継がれた場合は触らない（ちらつき防止）
   }else{
     applyStep(state,step);
     cursor=steps.length;updateStepUI();render(state);
