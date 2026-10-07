@@ -45,10 +45,11 @@ main{flex:1; display:flex; min-height:0}
 }
 #hintBar.idle{color:var(--dim); background:transparent}
 #canvasBox{flex:1; display:flex; align-items:center; justify-content:center; min-height:0; padding:8px; background:#080c11}
-canvas#stage{max-width:100%; max-height:100%; border-radius:6px; box-shadow:0 0 0 1px var(--line), 0 12px 40px rgba(0,0,0,.6); touch-action:manipulation;
-  /* 盤面を独立した層として扱わせる。こうしないと中身が変わるたびに影や角丸まで
-     描き直され、環境によっては画面がちらつく */
-  transform:translateZ(0); will-change:transform; backface-visibility:hidden}
+/* 盤面は特別な合成指定をしない。
+   transform:translateZ(0) や will-change で独立した層に押し出すと、環境によっては
+   ページ本体と表示の同期が取れなくなり、1枚の絵の上半分と下半分に別のコマが
+   混ざる（ティアリング）。標準の合成に任せるのが確実。 */
+canvas#stage{max-width:100%; max-height:100%; border-radius:6px; box-shadow:0 0 0 1px var(--line), 0 12px 40px rgba(0,0,0,.6); touch-action:manipulation}
 /* ドラッグ調整中だけスクロールを止めて、指の動きを全部ドラッグに回す */
 canvas#stage.layEdit{touch-action:none; cursor:move}
 #transport{
@@ -250,7 +251,7 @@ body.panelHidden #splitter{display:none}
 </head>
 <body>
 <header>
-  <h1>デュエパ<b>盤面</b>作成ツール</h1>
+  <h1>デュエパ<b>盤面</b>作成ツール <span id="buildTag" style="font-size:10px;color:#4a5d72;letter-spacing:0;font-weight:600"></span></h1>
   <span class="spacer"></span>
   <button id="btnPanelToggle" class="small" title="操作パネルを畳んで盤面を広くする">▶｜ パネルを畳む</button>
   <button id="btnSave" class="small">保存</button>
@@ -1865,7 +1866,9 @@ function drawPanelBody(st,i,g,opts,VROT){
   }
   // ゾーンラベル: 内側(バトルゾーン側)に表示
   // 山札
-  drawCard(g.deck.x,g.deck.y,g.deck.w,g.deck.h,{faceDown:true,upside:flip});
+  // 0枚のときはカードを置かず、点線の空枠にする
+  if(p.deck>0)drawCard(g.deck.x,g.deck.y,g.deck.w,g.deck.h,{faceDown:true,upside:flip});
+  else{rr(g.deck.x,g.deck.y,g.deck.w,g.deck.h,6);ctx.strokeStyle='#33414f';ctx.setLineDash([5,4]);ctx.lineWidth=1.5;ctx.stroke();ctx.setLineDash([]);}
   hitRects.push({kind:'deck',p:i,rect:{x:g.deck.x,y:g.deck.y,w:g.deck.w,h:g.deck.h}});
   ctx.fillStyle='#dfe9f5';ctx.font='800 19px '+FONTF;ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText(p.deck,g.deck.x+g.deck.w/2,flip?g.deck.y+g.deck.h+14:g.deck.y-13);
@@ -2818,21 +2821,33 @@ function makeAnimRaw(step,pre,post){
       const bh=pr?Math.max(56,Math.min(120,pr.h*0.26)):120;
       const cy=pr?pr.y+pr.h/2:522;
       const fs0=pr?Math.round(bh*0.52):62;
+      // 文字と大きさは最初に一度だけ決める（毎コマ測り直すと字幅が揺れることがある）
+      const nm0=config.players[d.p]?config.players[d.p].name:'';
+      const tn0=(post.turnCounts&&post.turnCounts[d.p])||post.turnNo;
+      const tpl0=(d.text!=null&&d.text!=='')?d.text:(config.turnText||'{name} ターン{n}');
+      const msg0=tpl0.replace(/\{name\}/g,nm0).replace(/\{n\}/g,tn0);
+      let fsFix=fs0;
+      try{
+        ctx.save();ctx.font='900 '+fsFix+'px '+FONTF;
+        while(ctx.measureText(msg0).width>A.w*(pr?0.86:0.56)&&fsFix>(pr?16:22)){
+          fsFix-=2;ctx.font='900 '+fsFix+'px '+FONTF;}
+        ctx.restore();
+      }catch(e){}
+      // ターン開始では盤面が一斉に変わる（全体のアンタップ・ターン枠の移動）。
+      // 帯がゆっくり現れると、盤面だけ先に動いて見えて落ち着かないので、
+      // 出るときは素早く、消えるときはゆっくりにする。
+      const easeOut=x=>1-(1-x)*(1-x);
       return {base:post,draw(tt){
-        const a=tt<0.15?tt/0.15:(tt>0.8?(1-tt)/0.2:1);
+        // 最初のコマから見える濃さで出す（盤面の変化と帯の出現を同じ瞬間にそろえる）
+        const a=tt<0.09?(0.30+0.70*easeOut(Math.max(0,tt)/0.09))
+                       :(tt>0.84?easeOut(Math.max(0,1-tt)/0.16):1);
         ctx.save();ctx.globalAlpha=a;
         if(pr){ctx.beginPath();ctx.roundRect(pr.x,pr.y,pr.w,pr.h,14);ctx.clip();}
         ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(A.x,cy-bh/2,A.w,bh);
         ctx.fillStyle=msgCol;ctx.textAlign='center';ctx.textBaseline='middle';
         ctx.shadowColor='rgba(0,0,0,.85)';ctx.shadowBlur=8;
-        const nm=config.players[d.p].name;
-        const tn=(post.turnCounts&&post.turnCounts[d.p])||post.turnNo;
-        const tpl=(d.text!=null&&d.text!=='')?d.text:(config.turnText||'{name} ターン{n}');
-        const msg=tpl.replace(/\{name\}/g,nm).replace(/\{n\}/g,tn);
-        // 長い文字は帯に収まるよう自動縮小
-        let fs=fs0; ctx.font='900 '+fs+'px '+FONTF;
-        while(ctx.measureText(msg).width>A.w*(pr?0.86:0.56)&&fs>(pr?16:22)){fs-=2;ctx.font='900 '+fs+'px '+FONTF;}
-        ctx.fillText(msg,A.x+A.w/2,cy);
+        ctx.font='900 '+fsFix+'px '+FONTF;
+        ctx.fillText(msg0,A.x+A.w/2,cy);
         ctx.shadowBlur=0;
         ctx.strokeStyle=config.players[d.p].nameCol||civMain(config.players[d.p]);ctx.lineWidth=pr?3:4;
         const x0=A.x+A.w*(pr?0.06:0.2), x1=A.x+A.w*(pr?0.94:0.8);
@@ -3091,8 +3106,11 @@ function playStepAnim(step,pre,post,speed){
       _holdPresent++;
       try{
         render(anim.base,{hide:anim.hide});
+        // ターン開始の帯は知らせるための表示なので、自動ロゴより前に出さない（隠れないように）
+        const bandOnTop=(step.type==='turn');
+        if(bandOnTop)autoLogo(step,tt,anim.base);
         anim.draw(tt);
-        if(step.type!=='logo')autoLogo(step,tt,anim.base);
+        if(!bandOnTop&&step.type!=='logo')autoLogo(step,tt,anim.base);
       }finally{ _holdPresent--; }
       present();
       if(tt<1)requestAnimationFrame(frame);else res(true);
@@ -3131,13 +3149,16 @@ function playGroupAnim(group,pre,post,speed){
       _holdPresent++;
       try{
         render(base,{hide});
+        const bandOnTop=(group[0].type==='turn');
+        const lt=Math.min(1,el/total);
+        if(bandOnTop)autoLogo(group[0],lt,base);
         anims.forEach((a,i)=>{
           if(el<offs[i])return;
           const tt=Math.min(1,(el-offs[i])/dur);
           if(!seDone[i]&&tt>=seAts[i]){playSE(se);seDone[i]=true;}
           a.draw(tt);
         });
-        autoLogo(group[0],Math.min(1,el/total),base);
+        if(!bandOnTop)autoLogo(group[0],lt,base);
       }finally{ _holdPresent--; }
       present();
       LITE=false;
@@ -6001,8 +6022,10 @@ async function exportSure(){
     _holdPresent++;                       // 1コマ分を描き切ってから画面へ出す
     try{
       render(anims[0].base,{hide});
+      const bandOnTop=(pl.group[0].type==='turn');
+      if(bandOnTop)autoLogo(pl.group[0],tt,anims[0].base);
       anims.forEach(a=>a.draw(tt));
-      autoLogo(pl.group[0],tt,anims[0].base);
+      if(!bandOnTop)autoLogo(pl.group[0],tt,anims[0].base);
     }finally{ _holdPresent--; }
     present();
   }
@@ -6130,8 +6153,10 @@ async function exportByFrames(withAudio){
     _holdPresent++;                       // 1コマ分を描き切ってから画面へ出す
     try{
       render(anims[0].base,{hide});
+      const bandOnTop=(pl.group[0].type==='turn');
+      if(bandOnTop)autoLogo(pl.group[0],tt,anims[0].base);
       anims.forEach(a=>a.draw(tt));
-      autoLogo(pl.group[0],tt,anims[0].base);
+      if(!bandOnTop)autoLogo(pl.group[0],tt,anims[0].base);
     }finally{ _holdPresent--; }
     present();
   }
@@ -6466,6 +6491,10 @@ async function seedSamples(){
     const l=document.getElementById('favicon');if(l)l.href=c.toDataURL('image/png');
   }catch(e){}
 })();
+
+/* どのファイルが動いているかを双方で確認するための印（不具合の切り分け用） */
+const BUILD='b3';
+if($('#buildTag'))$('#buildTag').textContent=BUILD;
 
 /* ---------- init ---------- */
 (async function(){
